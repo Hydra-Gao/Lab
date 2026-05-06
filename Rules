@@ -1,0 +1,9 @@
+# 开始写之前
+git pull origin main
+
+# 写完之后
+git add .
+git commit -m "Update code"
+git push origin main
+
+# 提醒一下：两台电脑不要同时改同一个文件后都直接 push，不然容易再遇到 conflict。尽量养成 先 pull，再改代码，改完 commit + push 的习惯。
