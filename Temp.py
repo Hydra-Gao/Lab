@@ -1,0 +1,25 @@
+import spikeinterface.full as si
+from spikeinterface.curation import remove_duplicated_spikes
+
+sorting_phy = si.read_phy(
+    folder_path="phy_M12_test",
+    exclude_cluster_groups=["noise"]
+)
+
+before = sorting_phy.count_num_spikes_per_unit()
+print("Before:", before)
+
+for window in [0.25]:
+    sorting_dedup = remove_duplicated_spikes(
+        sorting_phy,
+        censored_period_ms=window,
+        method="keep_first"
+    )
+
+    after = sorting_dedup.count_num_spikes_per_unit()
+
+    print(f"\n=== censored_period_ms = {window} ===")
+    for unit_id in before:
+        removed = before[unit_id] - after.get(unit_id, 0)
+        if removed > 0:
+            print(f"Unit {unit_id}: removed {removed} spikes")
