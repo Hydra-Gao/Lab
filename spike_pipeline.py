@@ -1,10 +1,16 @@
 from pathlib import Path
 import spikeinterface.full as si
 import probeinterface as pi
+from config_local import RAW_DATA
 
 print("Loading...")
 
-folder = Path(r"C:\Users\15018\Desktop\Data\Neuralynx\2026-04-27_18-54-07") 
+bird = "884"
+date = "2026-04-27_18-54-07"
+
+folder = RAW_DATA / bird / date
+
+#folder = Path(r"C:\Users\15018\Desktop\Data\Neuralynx\2026-04-27_18-54-07") 
 
 recording = si.read_neuralynx(folder)
 
@@ -70,8 +76,12 @@ recording_cmr = si.common_reference(
     operator="median"
 )
 
+from config_local import WORKING_DIR
+
+preprocessed_folder = WORKING_DIR / "preprocessed_M12"
+
 recording_saved = recording_cmr.save(
-    folder="preprocessed_M12",
+    folder=preprocessed_folder,
     format="binary",
     overwrite=True
 )

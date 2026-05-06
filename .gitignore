@@ -25,3 +25,6 @@ phy*/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# local config
+config_local.py

@@ -32,9 +32,13 @@ recording_test = recording_seg0.frame_slice(
     end_frame=recording_seg0.get_num_frames(segment_index=0)
 )
 
+from config_local import WORKING_DIR
+
+sorter_folder = WORKING_DIR / "kilosort4_M12_test_output"
+
 sorting_test = si.run_sorter(
     sorter_name="kilosort4",
     recording=recording_test,
-    folder="kilosort4_M12_test_output",
+    folder=sorter_folder,
     remove_existing_folder=True
 )

@@ -1,3 +1,4 @@
+from config_local import OUTPUT_DIR, RAW_DATA
 import spikeinterface.full as si
 
 recording_saved = si.load("preprocessed_M12")
@@ -33,12 +34,16 @@ print(sorting_clean)
 print("Cleaned spike counts:")
 print(sorting_clean.count_num_spikes_per_unit())
 
+from config_local import WORKING_DIR
+
+analyzer_folder = WORKING_DIR / "analyzer_M12_test"
+
 analyzer = si.create_sorting_analyzer(
-    sorting=sorting_clean,
+    sorting=sorting_test,
     recording=recording_test,
     format="binary_folder",
-    folder="analyzer_M12_test_dedup",
-    overwrite=True
+    folder=analyzer_folder,
+    overwrite=None
 )
 
 analyzer.compute("random_spikes")
@@ -62,8 +67,12 @@ si.plot_unit_templates(analyzer, unit_ids=unit_ids[:5])
 si.plot_autocorrelograms(sorting_test, unit_ids=unit_ids[:10])
 si.plot_rasters(sorting_test)
 
+from config_local import OUTPUT_DIR
+
+phy_folder = OUTPUT_DIR / "phy_M12_test"
+
 si.export_to_phy(
     analyzer,
-    output_folder="phy_M12_test_dedup",
+    output_folder=phy_folder,
     remove_if_exists=True
 )
