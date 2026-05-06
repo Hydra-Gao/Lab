@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# SpikeInterface / sorting outputs
+preprocessed_*/
+kilosort*/
+analyzer*/
+phy*/
+
+# Large data
+*.ncs
+*.nev
+*.ntt
+*.dat
+*.bin
+*.raw
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
