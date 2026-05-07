@@ -66,7 +66,7 @@ recording_ordered = recording_ordered.set_probe(probe)
 
 recording_f = si.bandpass_filter(
     recording_ordered,
-    freq_min=10,
+    freq_min=100,
     freq_max=5000
 )
 
