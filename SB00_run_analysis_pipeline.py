@@ -3,11 +3,12 @@ import subprocess
 import sys
 
 scripts = [
-    "01_extract_events.py",
-    "02_build_trial_table.py",
-    "03_export_curated_spikes.py",
-    "04_label_spikes.py",
-    "05_compute_tuning_summary.py",
+    "SB01_extract_events.py",
+    "SB02_build_trial_table.py",
+    "SB03_export_curated_spikes.py",
+    "SB04_label_spikes.py",
+    "SB05_compute_tuning_summary.py",
+    "SB05b_compute_significance.py",
 ]
 
 for script in scripts:

@@ -10,9 +10,10 @@ SORTER_NAME = "kilosort4"
 RAW_NLX_FOLDER = RAW_DATA / BIRD / SESSION
 
 EVENTS_NEV_PATH = RAW_NLX_FOLDER / "Events.nev"
-STIMLOG_PATH = Path(
-    r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv"
-)
+
+# STIMLOG_PATH = Path(r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
+
+STIMLOG_PATH = Path(r"E:\Lab\Data\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 
 PREPROCESSED_FOLDER = WORKING_DIR / "preprocessed_M12"
 CURATED_SORTING_FOLDER = WORKING_DIR / f"sorting_M12_{SORTER_NAME}_curated"

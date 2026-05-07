@@ -3,8 +3,8 @@ import subprocess
 import sys
 
 scripts = [
-    "06_plot_units.py",
-    "07_plot_population.py",
+    "SB06_plot_units.py",
+    "SB07_plot_population.py",
 ]
 
 for script in scripts:

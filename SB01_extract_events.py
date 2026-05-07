@@ -204,7 +204,7 @@ def main() -> None:
     events = read_nev(EVENTS_NEV_PATH)
 
     # Optional debug: print all TTL rising/high events in the whole Events.nev
-    all_ttl_rising = events.loc[events["ttl_value"] > 0].copy()
+    """ all_ttl_rising = events.loc[events["ttl_value"] > 0].copy()
     all_ttl_rising = all_ttl_rising.sort_values("timestamp_us").reset_index(drop=True)
     all_ttl_rising["ttl_index_all"] = np.arange(len(all_ttl_rising), dtype=int)
 
@@ -217,7 +217,7 @@ def main() -> None:
         "ttl_value",
         "event_id",
         "event_string",
-    ]].to_string(index=False))
+    ]].to_string(index=False)) """
 
     seg_start_us, seg_end_us = get_selected_segment_bounds(RAW_NLX_FOLDER)
 
