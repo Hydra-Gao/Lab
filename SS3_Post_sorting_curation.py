@@ -2,6 +2,8 @@ import spikeinterface.full as si
 from spikeinterface.curation import CurationSorting, remove_duplicated_spikes
 from multiprocessing import freeze_support
 from config_local import WORKING_DIR
+import pandas as pd
+from pathlib import Path
 
 
 # =====================
@@ -23,24 +25,26 @@ CURATED_SORTING_FOLDERS = {
 MANUAL_MERGES = {
     "kilosort4": [
         # {"unit_ids": [3, 7], "new_unit_id": 307},
-        {"unit_ids": [8, 18], "new_unit_id": 8018},
+         {"unit_ids": [9, 22], "new_unit_id": 9022},
 
     ],
     "mountainsort5": [
         # {"unit_ids": [1, 5], "new_unit_id": 105},
+         {"unit_ids": [19, 21], "new_unit_id": 19021},
+         {"unit_ids": [17, 24], "new_unit_id": 17024}
     ],
 }
 
 # Set enabled=True only when you really want to apply it.
 REMOVE_DUPLICATE_SETTINGS = {
     "kilosort4": {
-        "enabled": False,
-        "censored_period_ms": 0.25,
+        "enabled": True,
+        "censored_period_ms": 0.1,
         "method": "keep_first",
     },
     "mountainsort5": {
-        "enabled": False,
-        "censored_period_ms": 0.25,
+        "enabled": True,
+        "censored_period_ms": 0.1,
         "method": "keep_first",
     },
 }
@@ -138,7 +142,7 @@ def compare_curated_sorters(sortings):
             sorting2_name=name2,
         )
 
-        print("\n===== Agreement scores =====")
+        """ print("\n===== Agreement scores =====")
         print(cmp.agreement_scores)
 
         print(f"\n===== Best matches: {name1} -> {name2} =====")
@@ -161,6 +165,15 @@ def compare_curated_sorters(sortings):
 
         cmp.agreement_scores.to_csv(
             WORKING_DIR / f"comparison_agreement_scores_M12_curated.csv"
+        ) """
+        
+        comparison_output_folder = WORKING_DIR / "comparison_M12_curated_report"
+        save_comparison_report(
+            cmp=cmp,
+            name1=name1,
+            name2=name2,
+            output_folder=comparison_output_folder,
+            threshold=0.5,
         )
 
     # If later you add more sorters, this still works.
@@ -171,6 +184,83 @@ def compare_curated_sorters(sortings):
         )
         print(comparison)
 
+def save_comparison_report(cmp, name1, name2, output_folder, threshold):
+    """Save comparison outputs into readable txt/csv files."""
+    output_folder = Path(output_folder)
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    # 1. Full agreement matrix
+    agreement_df = cmp.agreement_scores
+    agreement_df.to_csv(output_folder / "agreement_scores.csv")
+
+    # 2. High agreement pairs table
+    pairs = []
+    for unit1 in agreement_df.index:
+        for unit2 in agreement_df.columns:
+            score = agreement_df.loc[unit1, unit2]
+            if score >= threshold:
+                pairs.append({
+                    f"{name1}_unit": unit1,
+                    f"{name2}_unit": unit2,
+                    "agreement_score": score,
+                })
+
+    high_pairs_df = pd.DataFrame(pairs)
+
+    if len(high_pairs_df) > 0:
+        high_pairs_df = high_pairs_df.sort_values(
+            by="agreement_score",
+            ascending=False,
+        )
+
+    # 3. Human-readable summary
+    with open(output_folder / "summary.txt", "w", encoding="utf-8") as f:
+        f.write("===== CURATED SORTER COMPARISON SUMMARY =====\n\n")
+        f.write(f"Sorter 1: {name1}\n")
+        f.write(f"Sorter 2: {name2}\n")
+        f.write(f"Agreement threshold: {threshold}\n\n")
+
+        f.write("===== Unit counts =====\n")
+        f.write(f"{name1}: {len(agreement_df.index)} units\n")
+        f.write(f"{name2}: {len(agreement_df.columns)} units\n\n")
+
+        f.write("===== High agreement pairs =====\n")
+        if len(high_pairs_df) == 0:
+            f.write("No pairs above threshold.\n\n")
+        else:
+            for _, row in high_pairs_df.iterrows():
+                f.write(
+                    f"{name1} unit {row[f'{name1}_unit']} "
+                    f"<-> {name2} unit {row[f'{name2}_unit']} "
+                    f": agreement = {row['agreement_score']:.4f}\n"
+                )
+            f.write("\n")
+
+        f.write(f"===== Best matches: {name1} -> {name2} =====\n")
+        f.write(str(cmp.best_match_12))
+        f.write("\n\n")
+
+        f.write(f"===== Best matches: {name2} -> {name1} =====\n")
+        f.write(str(cmp.best_match_21))
+        f.write("\n\n")
+
+        f.write(f"===== Possible matches: {name1} -> {name2} =====\n")
+        f.write(str(cmp.possible_match_12))
+        f.write("\n\n")
+
+        f.write(f"===== Possible matches: {name2} -> {name1} =====\n")
+        f.write(str(cmp.possible_match_21))
+        f.write("\n\n")
+
+        f.write(f"===== Hungarian match: {name1} -> {name2} =====\n")
+        f.write(str(cmp.hungarian_match_12))
+        f.write("\n\n")
+
+        f.write(f"===== Hungarian match: {name2} -> {name1} =====\n")
+        f.write(str(cmp.hungarian_match_21))
+        f.write("\n")
+
+    print(f"\nComparison report saved to: {output_folder}")
 
 def main():
     sortings = {}

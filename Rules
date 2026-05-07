@@ -7,3 +7,17 @@ git commit -m "Update code"
 git push origin main
 
 # 提醒一下：两台电脑不要同时改同一个文件后都直接 push，不然容易再遇到 conflict。尽量养成 先 pull，再改代码，改完 commit + push 的习惯。
+
+
+# from pathlib import Path
+
+# RAW_DATA = Path(r"F:\Work\UBC\Lab\Data")
+# WORKING_DIR = Path(r"F:\Code\Flight_lab\Project\Working_dir_processing")
+# OUTPUT_DIR = Path(r"F:\Code\Flight_lab\Project\Output_dir_almost")
+
+
+# phy template-gui  F:\Code\Flight_lab\Project\Output_dir_almost\phy_M12_mountainsort5_curated\params.py
+
+# phy template-gui  F:\Code\Flight_lab\Project\Output_dir_almost\phy_M12_kilosort4_curated\params.py
+
+# recording_seg = recording_saved.select_segments([n]) need to be changed in SS2_Sorting.py and SS4_Export_phy.py each time when running a different segment (e.g., 0, 1, or 2)
