@@ -6,7 +6,7 @@ from config_local import RAW_DATA
 print("Loading...")
 
 bird = "TG884"
-date = "2026-04-27_20-41-10"
+date = "2026-04-27_23-36-29"
 
 folder = RAW_DATA / bird / date
 
@@ -14,10 +14,45 @@ folder = RAW_DATA / bird / date
 
 recording = si.read_neuralynx(folder)
 
-print(recording)
-print("Channel IDs:", recording.get_channel_ids())
-print("Sampling frequency:", recording.get_sampling_frequency())
-print("Duration:", recording.get_total_duration())
+info_lines = []
+
+info_lines.append(str(recording))
+info_lines.append("")
+
+# full segment info
+info_lines.append(f"Number of segments: {recording.get_num_segments()}")
+
+for seg_idx in range(recording.get_num_segments()):
+
+    n_samples = recording.get_num_samples(segment_index=seg_idx)
+
+    duration_sec = (
+        n_samples / recording.get_sampling_frequency()
+    )
+
+    info_lines.append(
+        f"Segment {seg_idx}: "
+        f"samples={n_samples}, "
+        f"duration_sec={duration_sec:.2f}"
+    )
+
+info_lines.append("")
+info_lines.append(f"Channel IDs: {recording.get_channel_ids()}")
+info_lines.append(f"Sampling frequency: {recording.get_sampling_frequency()}")
+info_lines.append(f"Total duration: {recording.get_total_duration():.2f} sec")
+
+for line in info_lines:
+    print(line)
+
+from config_local import WORKING_DIR
+
+info_path = WORKING_DIR / "recording_info_M12.txt"
+
+with open(info_path, "w", encoding="utf-8") as f:
+    for line in info_lines:
+        f.write(line + "\n")
+
+print(f"Saved recording info to: {info_path}")
 
 site_to_ad = {
     1: 8,  2: 16, 3: 7,  4: 31,
