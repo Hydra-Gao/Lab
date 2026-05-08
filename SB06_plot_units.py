@@ -330,9 +330,10 @@ def add_summary_text(ax, unit_id, tuning_row, sig_row):
         r = sig_row.iloc[0]
         lines += [
             "",
-            f"Motion responsive: {bool(r.get('is_motion_responsive', False))}",
-            f"Motion suppressed: {bool(r.get('is_motion_suppressed', False))}",
-            f"Direction tuned: {bool(r.get('is_direction_tuned', False))}",
+            f"motion specific two_sided: {r.get('p_motion_specific_two_sided', np.nan):.4f}",
+            f"Motion responsive: {r.get('p_motion_responsive', np.nan):.4f}",
+            f"Motion suppressed: {r.get('p_motion_suppressed', np.nan):.4f}",
+            f"Direction tuned: {r.get('p_direction_tuned', np.nan):.4f}",
             "",
             f"q motion-specific: {r.get('q_motion_specific', np.nan):.4f}",
             f"q direction tuning: {r.get('q_direction_tuning', np.nan):.4f}",

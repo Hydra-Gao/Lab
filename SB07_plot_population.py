@@ -216,11 +216,25 @@ def plot_depth_response_strength(ax, tuning, units_to_plot):
 
     sizes = 40
 
+    # Separate valid / NaN DSI
+    df_valid = df[df["dsi"].notna()]
+    df_nan = df[df["dsi"].isna()]
+
+    # Normal DSI-colored points
     sc = ax.scatter(
-        df["mean_moving_fr"],
-        df["depth_um"],
+        df_valid["mean_moving_fr"],
+        df_valid["depth_um"],
         s=sizes,
-        c=df["dsi"],
+        c=df_valid["dsi"],
+        alpha=0.8,
+    )
+
+    # NaN DSI points in black
+    ax.scatter(
+        df_nan["mean_moving_fr"],
+        df_nan["depth_um"],
+        s=sizes,
+        color="black",
         alpha=0.8,
     )
 
@@ -238,7 +252,12 @@ def plot_depth_response_strength(ax, tuning, units_to_plot):
             alpha=0.9,
         )
 
-    ax.invert_yaxis()
+    y_min = df["depth_um"].min()
+    y_max = df["depth_um"].max()
+    y_pad = (y_max - y_min) * 0.08
+
+    ax.set_ylim(y_max + y_pad, y_min - y_pad)  # depth 越大越往下
+    ax.margins(x=0.08)
     ax.set_xlabel("Mean moving FR")
     ax.set_ylabel("Probe depth (um)")
     ax.set_title("Mean moving response by depth")
@@ -266,15 +285,48 @@ def plot_depth_preferred_direction(ax, tuning, units_to_plot):
 
     sizes = 40
 
+    # Separate valid / NaN DSI
+    df_valid = df[df["dsi"].notna()]
+    df_nan = df[df["dsi"].isna()]
+
+    # Normal DSI-colored points
     sc = ax.scatter(
-        df["vector_sum_direction"],
-        df["depth_um"],
+        df_valid["vector_sum_direction"],
+        df_valid["depth_um"],
         s=sizes,
-        c=df["vector_strength"],
+        c=df_valid["vector_strength"],
         alpha=0.8,
     )
 
-    ax.invert_yaxis()
+    # NaN DSI points in black
+    ax.scatter(
+        df_nan["vector_sum_direction"],
+        df_nan["depth_um"],
+        s=sizes,
+        color="black",
+        alpha=0.8,
+    )
+
+    rng = np.random.default_rng(42)
+
+    for _, row in df.iterrows():
+        jitter_x = rng.uniform(-0.05, 0.05)
+        jitter_y = rng.uniform(-10, 10)
+
+        ax.text(
+            row["vector_sum_direction"] + jitter_x,
+            row["depth_um"] + jitter_y,
+            str(int(row["unit_id"])),
+            fontsize=7,
+            alpha=0.9,
+        )
+
+    y_min = df["depth_um"].min()
+    y_max = df["depth_um"].max()
+    y_pad = (y_max - y_min) * 0.08
+
+    ax.set_ylim(y_max + y_pad, y_min - y_pad)  # depth 越大越往下
+    ax.margins(x=0.08)
     ax.set_xlim(-10, 370)
     ax.set_xticks([0, 90, 180, 270, 360])
     ax.set_xlabel("Vector-sum preferred direction")
@@ -501,6 +553,7 @@ def main():
         f"Population summary | {PLOT_MODE} units | n = {len(units_to_plot)}",
         fontsize=16,
     )
+    
 
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     fig.savefig(pdf_path)

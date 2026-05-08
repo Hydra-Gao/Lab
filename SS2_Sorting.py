@@ -27,7 +27,7 @@ from spikeinterface.sorters import Kilosort4Sorter
 
 from spikeinterface.core import select_segment_recording
 
-recording_seg = recording_saved.select_segments([0])
+recording_seg = recording_saved.select_segments([5])
 
 recording_test = recording_seg.frame_slice(
     start_frame=0,
