@@ -196,6 +196,94 @@ def plot_motion_response_heatmap_zscore(ax, condition_summary, units_to_plot):
     return im
 
 
+def plot_depth_response_strength(ax, tuning, units_to_plot):
+    """Plot response strength by probe depth."""
+    needed = ["unit_id", "depth_um", "mean_moving_fr", "dsi"]
+
+    for col in needed:
+        if col not in tuning.columns:
+            ax.text(0.5, 0.5, f"Missing column: {col}", ha="center", va="center")
+            ax.set_title("Depth vs response")
+            return
+
+    df = tuning[tuning["unit_id"].isin(units_to_plot)].copy()
+    df = df.dropna(subset=["depth_um", "mean_moving_fr"])
+
+    if df.empty:
+        ax.text(0.5, 0.5, "No location data", ha="center", va="center")
+        ax.set_title("Depth vs response")
+        return
+
+    sizes = 40
+
+    sc = ax.scatter(
+        df["mean_moving_fr"],
+        df["depth_um"],
+        s=sizes,
+        c=df["dsi"],
+        alpha=0.8,
+    )
+
+    rng = np.random.default_rng(42)
+
+    for _, row in df.iterrows():
+        jitter_x = rng.uniform(-0.05, 0.05)
+        jitter_y = rng.uniform(-10, 10)
+
+        ax.text(
+            row["mean_moving_fr"] + jitter_x,
+            row["depth_um"] + jitter_y,
+            str(int(row["unit_id"])),
+            fontsize=7,
+            alpha=0.9,
+        )
+
+    ax.invert_yaxis()
+    ax.set_xlabel("Mean moving FR")
+    ax.set_ylabel("Probe depth (um)")
+    ax.set_title("Mean moving response by depth")
+
+    return sc
+
+
+def plot_depth_preferred_direction(ax, tuning, units_to_plot):
+    """Plot preferred direction / vector-sum direction by probe depth."""
+    needed = ["unit_id", "depth_um", "vector_sum_direction", "vector_strength"]
+
+    for col in needed:
+        if col not in tuning.columns:
+            ax.text(0.5, 0.5, f"Missing column: {col}", ha="center", va="center")
+            ax.set_title("Depth vs preferred direction")
+            return
+
+    df = tuning[tuning["unit_id"].isin(units_to_plot)].copy()
+    df = df.dropna(subset=["depth_um", "vector_sum_direction"])
+
+    if df.empty:
+        ax.text(0.5, 0.5, "No location data", ha="center", va="center")
+        ax.set_title("Depth vs preferred direction")
+        return
+
+    sizes = 40
+
+    sc = ax.scatter(
+        df["vector_sum_direction"],
+        df["depth_um"],
+        s=sizes,
+        c=df["vector_strength"],
+        alpha=0.8,
+    )
+
+    ax.invert_yaxis()
+    ax.set_xlim(-10, 370)
+    ax.set_xticks([0, 90, 180, 270, 360])
+    ax.set_xlabel("Vector-sum preferred direction")
+    ax.set_ylabel("Probe depth (um)")
+    ax.set_title("Preferred direction by depth")
+
+    return sc
+
+
 def plot_preferred_direction_distribution(ax, tuning, units_to_plot):
     """Histogram of preferred directions."""
     df = tuning[tuning["unit_id"].isin(units_to_plot)].copy()
@@ -343,7 +431,7 @@ def main():
 
     pdf_path = plot_dir / "population_summary_one_page.pdf"
 
-    fig, axes = plt.subplots(3, 2, figsize=(14, 16))
+    fig, axes = plt.subplots(4, 2, figsize=(14, 21))
 
     im_raw = plot_motion_response_heatmap(
         ax=axes[0, 0],
@@ -358,26 +446,38 @@ def main():
     )
 
     plot_preferred_direction_distribution(
-        ax=axes[1, 0],
-        tuning=tuning,
-        units_to_plot=units_to_plot,
-    )
-
-    plot_dsi_distribution(
-        ax=axes[1, 1],
-        tuning=tuning,
-        units_to_plot=units_to_plot,
-    )
-
-    plot_vector_strength_distribution(
         ax=axes[2, 0],
         tuning=tuning,
         units_to_plot=units_to_plot,
     )
 
-    plot_significance_summary(
+    plot_dsi_distribution(
         ax=axes[2, 1],
+        tuning=tuning,
+        units_to_plot=units_to_plot,
+    )
+
+    plot_vector_strength_distribution(
+        ax=axes[3, 0],
+        tuning=tuning,
+        units_to_plot=units_to_plot,
+    )
+
+    plot_significance_summary(
+        ax=axes[3, 1],
         sig=sig,
+    )
+
+    im_depth_dir = plot_depth_preferred_direction(
+        ax=axes[1, 0],
+        tuning=tuning,
+        units_to_plot=units_to_plot,
+    )
+
+    im_depth_resp = plot_depth_response_strength(
+        ax=axes[1, 1],
+        tuning=tuning,
+        units_to_plot=units_to_plot,
     )
 
     # Add colorbars only for the two heatmaps
@@ -388,6 +488,14 @@ def main():
     if im_z is not None:
         cbar = fig.colorbar(im_z, ax=axes[0, 1], fraction=0.046, pad=0.04)
         cbar.set_label("Z-score")
+
+    if im_depth_dir is not None:
+        cbar = fig.colorbar(im_depth_dir, ax=axes[1, 0], fraction=0.046, pad=0.04)
+        cbar.set_label("Vector strength")
+
+    if im_depth_resp is not None:
+        cbar = fig.colorbar(im_depth_resp, ax=axes[1, 1], fraction=0.046, pad=0.04)
+        cbar.set_label("DSI")
 
     fig.suptitle(
         f"Population summary | {PLOT_MODE} units | n = {len(units_to_plot)}",

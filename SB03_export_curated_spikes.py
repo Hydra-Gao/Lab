@@ -12,6 +12,7 @@ from SB0_config_analysis import (
     PHY_FOLDER,
     SORTER_NAME,
     SAMPLING_FREQUENCY,
+    ANALYZER_FOLDER,
 )
 
 
@@ -84,6 +85,34 @@ def main():
 
     if len(spikes) > 0:
         spikes = spikes.sort_values(["spike_time_sec", "unit_id"]).reset_index(drop=True)
+    
+    unit_location = {}
+
+    if ANALYZER_FOLDER.exists():
+        analyzer = si.load_sorting_analyzer(ANALYZER_FOLDER)
+
+        unit_to_channel = si.get_template_extremum_channel(
+            analyzer,
+            peak_sign="neg",
+        )
+
+        channel_locations = analyzer.get_channel_locations()
+        channel_ids = list(analyzer.channel_ids)
+
+        channel_loc_map = {
+            ch: channel_locations[i]
+            for i, ch in enumerate(channel_ids)
+        }
+
+        for unit_id, best_ch in unit_to_channel.items():
+            loc = channel_loc_map.get(best_ch, [np.nan, np.nan])
+            unit_location[unit_id] = {
+                "best_channel": best_ch,
+                "x_um": float(loc[0]),
+                "depth_um": float(loc[1]),
+            }
+    else:
+        print("Analyzer folder not found. Unit locations will be NaN.")
 
     # -----------------------------
     # Export curated_units.csv
@@ -94,12 +123,17 @@ def main():
     for unit_id in selected_units:
         n_spikes = len(sorting.get_unit_spike_train(unit_id=unit_id))
 
+        loc = unit_location.get(unit_id, {})
+
         unit_rows.append(
             {
                 "unit_id": unit_id,
                 "sorter": SORTER_NAME,
                 "phy_group": "good" if good_units is not None and unit_id in good_units else "curated",
                 "n_spikes": n_spikes,
+                "best_channel": loc.get("best_channel", np.nan),
+                "x_um": loc.get("x_um", np.nan),
+                "depth_um": loc.get("depth_um", np.nan),
             }
         )
 

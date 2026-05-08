@@ -25,13 +25,13 @@ CURATED_SORTING_FOLDERS = {
 MANUAL_MERGES = {
     "kilosort4": [
         # {"unit_ids": [3, 7], "new_unit_id": 307},
-         {"unit_ids": [9, 22], "new_unit_id": 9022},
+        # {"unit_ids": [9, 19], "new_unit_id": 9019},
 
     ],
     "mountainsort5": [
         # {"unit_ids": [1, 5], "new_unit_id": 105},
-         {"unit_ids": [19, 21], "new_unit_id": 19021},
-         {"unit_ids": [17, 24], "new_unit_id": 17024}
+        # {"unit_ids": [17, 18], "new_unit_id": 17018},
+        # {"unit_ids": [17, 24], "new_unit_id": 17024}
     ],
 }
 
