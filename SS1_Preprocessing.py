@@ -6,7 +6,7 @@ from config_local import RAW_DATA
 print("Loading...")
 
 bird = "TG884"
-date = "2026-04-27_23-36-29"
+date = "2026-04-27_18-54-07"
 
 folder = RAW_DATA / bird / date
 
@@ -101,8 +101,9 @@ recording_ordered = recording_ordered.set_probe(probe)
 
 recording_f = si.bandpass_filter(
     recording_ordered,
-    freq_min=100,
-    freq_max=5000
+    freq_min=10,
+    freq_max=5000,
+    ignore_low_freq_error=True
 )
 
 recording_cmr = si.common_reference(

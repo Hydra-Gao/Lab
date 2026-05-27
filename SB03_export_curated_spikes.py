@@ -16,9 +16,30 @@ from SB0_config_analysis import (
 )
 
 
+# def load_phy_good_units(phy_folder: Path):
+#     """Read good units manually labeled in Phy."""
+#     group_path = phy_folder / "cluster_group.tsv"
+
+#     if not group_path.exists():
+#         print("cluster_group.tsv not found. Exporting all units instead.")
+#         return None
+
+#     groups = pd.read_csv(group_path, sep="\t")
+
+#     if "cluster_id" not in groups.columns or "group" not in groups.columns:
+#         raise ValueError("cluster_group.tsv must contain cluster_id and group columns.")
+
+#     good_units = groups.loc[groups["group"] == "good", "cluster_id"].tolist()
+
+#     print(f"Good units from Phy: {good_units}")
+
+#     return good_units
+
 def load_phy_good_units(phy_folder: Path):
-    """Read good units manually labeled in Phy."""
+    """Read good units manually labeled in Phy, then map Phy ids to SpikeInterface unit ids."""
+
     group_path = phy_folder / "cluster_group.tsv"
+    info_path = phy_folder / "cluster_info.tsv"
 
     if not group_path.exists():
         print("cluster_group.tsv not found. Exporting all units instead.")
@@ -29,11 +50,44 @@ def load_phy_good_units(phy_folder: Path):
     if "cluster_id" not in groups.columns or "group" not in groups.columns:
         raise ValueError("cluster_group.tsv must contain cluster_id and group columns.")
 
-    good_units = groups.loc[groups["group"] == "good", "cluster_id"].tolist()
+    good_phy_ids = groups.loc[groups["group"] == "good", "cluster_id"].tolist()
 
-    print(f"Good units from Phy: {good_units}")
+    print(f"Good Phy ids from cluster_group.tsv: {good_phy_ids}")
 
-    return good_units
+    if not info_path.exists():
+        print("cluster_info.tsv not found. Cannot map Phy ids to si_unit_id.")
+        print("Using Phy cluster_id directly, but this may be wrong for Mountainsort5.")
+        return good_phy_ids
+
+    info = pd.read_csv(info_path, sep="\t")
+
+    # Different Phy/SpikeInterface versions may use either "id" or "cluster_id"
+    if "cluster_id" in info.columns:
+        phy_id_col = "cluster_id"
+    elif "id" in info.columns:
+        phy_id_col = "id"
+    else:
+        raise ValueError("cluster_info.tsv must contain either 'cluster_id' or 'id'.")
+
+    if "si_unit_id" not in info.columns:
+        print("cluster_info.tsv has no si_unit_id column.")
+        print("Using Phy cluster_id directly, but this may be wrong for Mountainsort5.")
+        return good_phy_ids
+
+    map_df = info[[phy_id_col, "si_unit_id"]].drop_duplicates()
+
+    good_si_units = (
+        map_df.loc[map_df[phy_id_col].isin(good_phy_ids), "si_unit_id"]
+        .tolist()
+    )
+
+    print(f"Mapped good si_unit_id: {good_si_units}")
+
+    missing = [x for x in good_phy_ids if x not in map_df[phy_id_col].tolist()]
+    if missing:
+        print(f"Warning: these Phy ids were not found in cluster_info.tsv: {missing}")
+
+    return good_si_units
 
 
 def main():
