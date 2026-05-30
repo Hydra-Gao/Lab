@@ -3,16 +3,17 @@ from config_local import RAW_DATA, WORKING_DIR, OUTPUT_DIR
 
 BIRD = "TG884"
 SESSION = "2026-04-27_18-54-07"
-# SORTER_NAME = "kilosort4" 
-SORTER_NAME = "mountainsort5"
+SORTER_NAME = "kilosort4" 
+# SORTER_NAME = "mountainsort5"
 
 # path settings
 RAW_NLX_FOLDER = RAW_DATA / BIRD / SESSION
 
 EVENTS_NEV_PATH = RAW_NLX_FOLDER / "Events.nev"
 
-STIMLOG_PATH = Path(r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0x20c9.csv")
+# STIMLOG_PATH = Path(r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0x20c9.csv")
 # STIMLOG_PATH = Path(r"E:\Lab\_analyzed\Section_1-1\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
+STIMLOG_PATH = Path(r"F:\Lab\Raw_data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 
 # STIMLOG_PATH = Path(r"E:\Lab\Data\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 
@@ -35,13 +36,27 @@ SEGMENT_END_TIMESTAMP_US = None
 
 # Stimulus / alignment settings
 # TTL is sent during Stimulus_state == "moving" in the Psychopy script.
+
+# # TG884(OCb):
+# MOTION_STATE = "moving"
+# BASELINE_WINDOW = (-4.0, 0.0)
+# EARLY_WINDOW = (0.0, 1.0)
+# SUSTAINED_RESPONSE_WINDOW = (1.0, 6.0)
+# MOVING_WINDOW = (0.0, 6.0)
+# SAMPLING_FREQUENCY = 32000.0
+
+# TG915(VbC):
 MOTION_STATE = "moving"
-BASELINE_WINDOW = (-4.0, 0.0)
+BASELINE_WINDOW = (-3.0, 0.0)
 EARLY_WINDOW = (0.0, 1.0)
-SUSTAINED_RESPONSE_WINDOW = (1.0, 6.0)
-MOVING_WINDOW = (0.0, 6.0)
+SUSTAINED_RESPONSE_WINDOW = (1.0, 5.0)
+MOVING_WINDOW = (0.0, 5.0)
 SAMPLING_FREQUENCY = 32000.0
 
+
 # Optional sanity check.
-# Current design: 4 directions × 5 replicates × 1 speed = 20 moving epochs.
-EXPECTED_MOTION_TTL_COUNT = 20
+# TG884(OCb): 4 directions × 5 replicates × 1 speed = 20 moving epochs.
+# EXPECTED_MOTION_TTL_COUNT = 20
+
+# TG915(VbC): 12 patterns × 6 replicates × 1 speed = 72 moving epochs.
+EXPECTED_MOTION_TTL_COUNT = 72

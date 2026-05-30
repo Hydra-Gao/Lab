@@ -8,7 +8,7 @@ scripts = [
     "SB03_export_curated_spikes.py",
     "SB04_label_spikes.py",
     "SB05_compute_tuning_summary.py",
-    "SB05b_compute_significance.py",
+    "SB06_compute_significance.py",
 ]
 
 for script in scripts:
