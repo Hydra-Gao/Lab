@@ -1,8 +1,8 @@
 from pathlib import Path
 from config_local import RAW_DATA, WORKING_DIR, OUTPUT_DIR
 
-BIRD = "TG884"
-SESSION = "2026-04-27_18-54-07"
+BIRD = "TG915"
+SESSION = "2026-05-27_19-14-21"
 SORTER_NAME = "kilosort4" 
 # SORTER_NAME = "mountainsort5"
 
@@ -13,7 +13,7 @@ EVENTS_NEV_PATH = RAW_NLX_FOLDER / "Events.nev"
 
 # STIMLOG_PATH = Path(r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0x20c9.csv")
 # STIMLOG_PATH = Path(r"E:\Lab\_analyzed\Section_1-1\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
-STIMLOG_PATH = Path(r"F:\Lab\Raw_data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
+STIMLOG_PATH = Path(r"F:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_op_s__2026_05_27_VbC_12patterns_3screens_001.csv")
 
 # STIMLOG_PATH = Path(r"E:\Lab\Data\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 

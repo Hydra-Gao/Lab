@@ -96,7 +96,7 @@ def main():
     recording_saved = si.load(PREPROCESSED_FOLDER)
 
     # Your sorter outputs are 1 segment, so use the first segment only.
-    recording_test = recording_saved.select_segments([0])
+    recording_test = recording_saved.select_segments([1])
 
     for sorter_name in CURATED_SORTING_FOLDERS:
         export_one_sorter_to_phy(sorter_name, recording_test)
