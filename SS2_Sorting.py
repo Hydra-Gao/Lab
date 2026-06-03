@@ -48,11 +48,11 @@ sorting_test = si.run_sorter(
     verbose=True
 )
 
-sorting_test = si.run_sorter(
-    sorter_name="mountainsort5",
-    recording=recording_test,
-    folder=sorter_folder_mountainsort5,
-    remove_existing_folder=True,
-    docker_image=True,
-    verbose=True
-)
+# sorting_test = si.run_sorter(
+#     sorter_name="mountainsort5",
+#     recording=recording_test,
+#     folder=sorter_folder_mountainsort5,
+#     remove_existing_folder=True,
+#     docker_image=True,
+#     verbose=True
+# )

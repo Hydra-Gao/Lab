@@ -6,7 +6,7 @@ from config_local import RAW_DATA
 print("Loading...")
 
 bird = "TG915"
-date = "2026-05-27_19-14-21"
+date = "Fixed_header_2026-05-27_19-14-21"
 
 folder = RAW_DATA / bird / date
 
@@ -74,7 +74,7 @@ print("AD order tip to base:", ad_order_tip_to_base)
 # Check channel id type first
 channel_ids = recording.get_channel_ids()
 print("Original channel IDs:", channel_ids)
-#print("Channel ID type:", type(channel_ids[0]))
+print("Channel ID type:", type(channel_ids[0]))
 
 # Convert AD order to the same type as recording channel IDs
 if isinstance(channel_ids[0], str):
@@ -99,24 +99,24 @@ recording_ordered = recording_ordered.set_probe(probe)
 #print("Channel locations:")
 #print(recording_ordered.get_channel_locations())
 
-recording_f = si.bandpass_filter(
-    recording_ordered,
-    freq_min=10,
-    freq_max=5000,
-    ignore_low_freq_error=True
-)
+# recording_f = si.bandpass_filter(
+#     recording_ordered,
+#     freq_min=10,
+#     freq_max=5000,
+#     ignore_low_freq_error=True
+# )
 
-recording_cmr = si.common_reference(
-    recording_f,
-    reference="global",
-    operator="median"
-)
+# recording_cmr = si.common_reference(
+#     recording_f,
+#     reference="global",
+#     operator="median"
+# )
 
 from config_local import WORKING_DIR
 
 preprocessed_folder = WORKING_DIR / "preprocessed_M12"
 
-recording_saved = recording_cmr.save(
+recording_saved = recording_ordered.save(
     folder=preprocessed_folder,
     format="binary",
     overwrite=True
