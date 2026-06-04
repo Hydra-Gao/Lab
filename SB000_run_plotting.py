@@ -8,8 +8,8 @@ import sys
 # ]
 
 scripts = [
-    "SB11_plot_units.py",
-    "SB12_plot_population.py",
+    "SB11b_plot_units_12patterns.py",
+    #"SB12_plot_population.py",
 ]
 
 for script in scripts:

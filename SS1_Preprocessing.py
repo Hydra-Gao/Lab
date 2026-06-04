@@ -99,12 +99,12 @@ recording_ordered = recording_ordered.set_probe(probe)
 #print("Channel locations:")
 #print(recording_ordered.get_channel_locations())
 
-# recording_f = si.bandpass_filter(
-#     recording_ordered,
-#     freq_min=10,
-#     freq_max=5000,
-#     ignore_low_freq_error=True
-# )
+recording_f = si.bandpass_filter(
+    recording_ordered,
+    freq_min=10,
+    freq_max=5000,
+    ignore_low_freq_error=True
+)
 
 # recording_cmr = si.common_reference(
 #     recording_f,

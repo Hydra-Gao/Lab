@@ -1,6 +1,7 @@
 import spikeinterface.full as si
 from multiprocessing import freeze_support
 from config_local import OUTPUT_DIR, WORKING_DIR
+import pandas as pd
 
 
 # =====================
@@ -31,6 +32,33 @@ QUALITY_METRIC_NAMES = [
     "presence_ratio",
 ]
 
+def load_phy_cluster_info(sorter_name):
+    """
+    Load Phy/Kilosort cluster_info.tsv if available.
+    This contains fields such as KSLabel, ContamPct, group, ch, depth, n_spikes, etc.
+    """
+    # First try raw sorter output folder
+    sorter_output_folder = WORKING_DIR / f"{sorter_name}_M12_test_output"
+    cluster_info_path = sorter_output_folder / "cluster_info.tsv"
+
+    # If not found, try exported Phy folder
+    if not cluster_info_path.exists():
+        cluster_info_path = PHY_FOLDERS[sorter_name] / "cluster_info.tsv"
+
+    if not cluster_info_path.exists():
+        print(f"No cluster_info.tsv found for {sorter_name}")
+        return None
+
+    print(f"Loading cluster info from: {cluster_info_path}")
+
+    cluster_info = pd.read_csv(cluster_info_path, sep="\t")
+
+    if "cluster_id" in cluster_info.columns:
+        cluster_info = cluster_info.rename(columns={"cluster_id": "unit_id"})
+
+    cluster_info["unit_id"] = cluster_info["unit_id"].astype(str)
+
+    return cluster_info
 
 def export_one_sorter_to_phy(sorter_name, recording):
     curated_sorting_folder = CURATED_SORTING_FOLDERS[sorter_name]
@@ -74,12 +102,35 @@ def export_one_sorter_to_phy(sorter_name, recording):
 
     metrics = analyzer.get_extension("quality_metrics").get_data()
 
+    metrics_out = metrics.copy()
+    metrics_out.index = metrics_out.index.astype(str)
+    metrics_out.index.name = "unit_id"
+    metrics_out = metrics_out.reset_index()
+
+    cluster_info = load_phy_cluster_info(sorter_name)
+
+    if cluster_info is not None:
+        metrics_out = metrics_out.merge(
+            cluster_info,
+            on="unit_id",
+            how="left",
+            suffixes=("", "_phy"),
+        )
+
+    print("\nQuality metrics + Phy/Kilosort cluster info:")
+    print(metrics_out)
+
+    metrics_out.to_csv(
+        WORKING_DIR / f"quality_metrics_M12_{sorter_name}_curated_with_phy_info.csv",
+        index=False,
+    )
+
     print("\nQuality metrics:")
     print(metrics)
 
-    metrics.to_csv(
-        WORKING_DIR / f"quality_metrics_M12_{sorter_name}_curated.csv"
-    )
+    # metrics.to_csv(
+    #     WORKING_DIR / f"quality_metrics_M12_{sorter_name}_curated.csv"
+    # )
 
     # 4. Export to Phy.
     si.export_to_phy(
@@ -96,7 +147,7 @@ def main():
     recording_saved = si.load(PREPROCESSED_FOLDER)
 
     # Your sorter outputs are 1 segment, so use the first segment only.
-    recording_test = recording_saved.select_segments([1])
+    recording_test = recording_saved.select_segments([2])
 
     for sorter_name in CURATED_SORTING_FOLDERS:
         export_one_sorter_to_phy(sorter_name, recording_test)
