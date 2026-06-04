@@ -1,5 +1,5 @@
 from pathlib import Path
-from config_local import RAW_DATA, WORKING_DIR, OUTPUT_DIR
+from config_local import RAW_DATA, WORKING_DIR, OUTPUT_DIR, SEGMENT_INDEX_TO_USE
 
 BIRD = "TG915"
 SESSION = "2026-05-27_19-14-21"
@@ -14,7 +14,7 @@ EVENTS_NEV_PATH = RAW_NLX_FOLDER / "Events.nev"
 # STIMLOG_PATH = Path(r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0x20c9.csv")
 # STIMLOG_PATH = Path(r"E:\Lab\_analyzed\Section_1-1\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 # STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_op_s__2026_05_27_VbC_12patterns_3screens_001.csv")
-STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_F_correct_2026_05_27_screen0_8dir_2speeds_001.csv")
+STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_R_2026_05_27_screen3_8dir_2speeds_001.csv")
 
 # STIMLOG_PATH = Path(r"E:\Lab\Data\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 
@@ -28,7 +28,7 @@ ANALYSIS_OUTPUT_DIR = OUTPUT_DIR / f"analysis_{BIRD}_{SESSION}_{SORTER_NAME}"
 
 # Recording segment selection
 # This MUST match the segment used in SS2_Sorting.py and SS4_Export_phy.py.
-RECORDING_SEGMENT_INDEX = 2
+RECORDING_SEGMENT_INDEX = SEGMENT_INDEX_TO_USE
 
 # If None, 01_extract_events.py will infer segment boundaries from .ncs timestamps.
 SEGMENT_START_TIMESTAMP_US = None

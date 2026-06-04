@@ -1,16 +1,4 @@
-# SB06_compute_significance_speed_split.py
-#
-# Speed-specific significance testing for single-screen 8-direction / 2-speed stimulus.
-#
-# Inputs from updated SB05:
-#   unit_trial_summary.csv
-#   unit_tuning_summary.csv      # unit × speed
-#
-# Outputs:
-#   unit_significance_summary.csv        unit × speed
-#   unit_direction_significance.csv      unit × speed × direction
-#
-# All tests use moving_minus_baseline and are performed separately for each speed.
+# 05b_compute_significance.py
 
 import numpy as np
 import pandas as pd
@@ -23,20 +11,12 @@ RANDOM_SEED = 42
 ALPHA = 0.05
 
 
-# =====================
-# Statistical helpers
-# =====================
-
-
 def paired_permutation_test(diff, n_perm=N_PERMUTATIONS, seed=RANDOM_SEED):
     """
     Paired sign-flip permutation test.
 
-    Used for trial-level signed response:
-        moving_fr - baseline_fr
-
-    Returns:
-        obs_mean, p_two_sided, p_greater, p_less
+    Used for:
+        moving_fr - static_fr
     """
     diff = np.asarray(diff, dtype=float)
     diff = diff[~np.isnan(diff)]
@@ -45,9 +25,15 @@ def paired_permutation_test(diff, n_perm=N_PERMUTATIONS, seed=RANDOM_SEED):
         return np.nan, np.nan, np.nan, np.nan
 
     rng = np.random.default_rng(seed)
+
     obs = np.mean(diff)
 
-    signs = rng.choice([-1, 1], size=(n_perm, len(diff)), replace=True)
+    signs = rng.choice(
+        [-1, 1],
+        size=(n_perm, len(diff)),
+        replace=True,
+    )
+
     null = np.mean(signs * diff, axis=1)
 
     p_two = (np.sum(np.abs(null) >= abs(obs)) + 1) / (n_perm + 1)
@@ -72,13 +58,16 @@ def one_way_f_stat(values, groups):
         return np.nan
 
     grand_mean = np.mean(values)
+
     ss_between = 0.0
     ss_within = 0.0
 
     for g in unique_groups:
         v = values[groups == g]
+
         if len(v) == 0:
             continue
+
         ss_between += len(v) * (np.mean(v) - grand_mean) ** 2
         ss_within += np.sum((v - np.mean(v)) ** 2)
 
@@ -93,10 +82,13 @@ def one_way_f_stat(values, groups):
 
 def direction_permutation_test(values, directions, n_perm=N_PERMUTATIONS, seed=RANDOM_SEED):
     """
-    Permutation test for direction tuning within one speed.
+    Permutation test for direction tuning.
 
     Null:
-        moving-baseline responses are exchangeable across direction labels.
+        motion-specific responses are exchangeable across direction labels.
+
+    Here values should be:
+        moving_fr - static_fr
     """
     values = np.asarray(values, dtype=float)
     directions = np.asarray(directions)
@@ -109,12 +101,14 @@ def direction_permutation_test(values, directions, n_perm=N_PERMUTATIONS, seed=R
         return np.nan, np.nan
 
     rng = np.random.default_rng(seed)
+
     obs_f = one_way_f_stat(values, directions)
 
     if np.isnan(obs_f):
         return np.nan, np.nan
 
     null_f = []
+
     for _ in range(n_perm):
         shuffled_dirs = rng.permutation(directions)
         null_f.append(one_way_f_stat(values, shuffled_dirs))
@@ -126,6 +120,7 @@ def direction_permutation_test(values, directions, n_perm=N_PERMUTATIONS, seed=R
         return obs_f, np.nan
 
     p_value = (np.sum(null_f >= obs_f) + 1) / (len(null_f) + 1)
+
     return obs_f, p_value
 
 
@@ -145,6 +140,7 @@ def bh_fdr(p_values):
 
     m = len(p)
     ranked_q = ranked_p * m / np.arange(1, m + 1)
+
     ranked_q = np.minimum.accumulate(ranked_q[::-1])[::-1]
     ranked_q = np.clip(ranked_q, 0, 1)
 
@@ -152,16 +148,12 @@ def bh_fdr(p_values):
     q[order] = ranked_q
 
     q_values[valid] = q
+
     return q_values
 
 
-# =====================
-# Main
-# =====================
-
-
 def main():
-    print("===== Compute speed-specific motion-baseline and direction significance =====")
+    print("===== Compute motion-specific and direction tuning significance =====")
 
     trial_summary_path = ANALYSIS_OUTPUT_DIR / "unit_trial_summary.csv"
     tuning_summary_path = ANALYSIS_OUTPUT_DIR / "unit_tuning_summary.csv"
@@ -169,19 +161,19 @@ def main():
     unit_trial = pd.read_csv(trial_summary_path)
     unit_tuning = pd.read_csv(tuning_summary_path)
 
-    if "speed" not in unit_trial.columns:
-        raise ValueError("unit_trial_summary.csv must contain a 'speed' column for speed-specific analysis.")
-
     rows = []
     direction_rows = []
 
-    for (unit_id, speed), df in unit_trial.groupby(["unit_id", "speed"], dropna=False):
+    for unit_id, df in unit_trial.groupby("unit_id"):
+
+        # Main signed response used in the new classification
         motion_response = df["moving_minus_baseline"]
 
-        mean_motion_response, p_motion_two, p_motion_greater, p_motion_less = paired_permutation_test(
-            motion_response
+        mean_motion_response, p_motion_two, p_motion_greater, p_motion_less = (
+            paired_permutation_test(motion_response)
         )
 
+        # Direction tuning based on signed motion-baseline response.
         direction_f, p_direction = direction_permutation_test(
             values=motion_response,
             directions=df["direction"],
@@ -190,30 +182,33 @@ def main():
         rows.append(
             {
                 "unit_id": unit_id,
-                "speed": speed,
                 "n_trials": df["trial_id"].nunique(),
+
                 "mean_moving_minus_baseline": mean_motion_response,
                 "p_motion_baseline_two_sided": p_motion_two,
                 "p_motion_baseline_responsive": p_motion_greater,
                 "p_motion_baseline_suppressed": p_motion_less,
+
                 "direction_f_stat_motion_baseline": direction_f,
                 "p_direction_tuning_motion_baseline": p_direction,
             }
         )
 
-        for direction, df_dir in df.groupby("direction", dropna=False):
+        # Direction-specific motion-baseline significance
+        for direction, df_dir in df.groupby("direction"):
+
             dir_response = df_dir["moving_minus_baseline"]
 
-            mean_dir_response, p_dir_two, p_dir_greater, p_dir_less = paired_permutation_test(
-                dir_response
+            mean_dir_response, p_dir_two, p_dir_greater, p_dir_less = (
+                paired_permutation_test(dir_response)
             )
 
             direction_rows.append(
                 {
                     "unit_id": unit_id,
-                    "speed": speed,
                     "direction": direction,
                     "n_trials": df_dir["trial_id"].nunique(),
+
                     "mean_moving_minus_baseline": mean_dir_response,
                     "p_motion_baseline_two_sided": p_dir_two,
                     "p_motion_baseline_responsive": p_dir_greater,
@@ -224,51 +219,50 @@ def main():
     sig = pd.DataFrame(rows)
     dir_sig = pd.DataFrame(direction_rows)
 
-    # -----------------------------
-    # FDR correction
-    # -----------------------------
-    # Unit × speed level. Correction is across all unit-speed rows.
+    # FDR correction across units
     sig["q_motion_baseline"] = bh_fdr(sig["p_motion_baseline_two_sided"])
-    sig["q_direction_tuning_motion_baseline"] = bh_fdr(sig["p_direction_tuning_motion_baseline"])
+    sig["q_direction_tuning_motion_baseline"] = bh_fdr(
+        sig["p_direction_tuning_motion_baseline"]
+    )
 
     sig["is_motion_baseline_responsive"] = (
         (sig["q_motion_baseline"] < ALPHA)
         & (sig["mean_moving_minus_baseline"] > 0)
     )
+
     sig["is_motion_baseline_suppressed"] = (
         (sig["q_motion_baseline"] < ALPHA)
         & (sig["mean_moving_minus_baseline"] < 0)
     )
+
     sig["is_direction_tuned_motion_baseline"] = (
         sig["q_direction_tuning_motion_baseline"] < ALPHA
     )
 
-    # Unit × speed × direction level. Correction is across all rows.
     dir_sig["q_motion_baseline_direction"] = bh_fdr(
         dir_sig["p_motion_baseline_two_sided"]
     )
+
     dir_sig["is_direction_response_significant"] = (
         dir_sig["q_motion_baseline_direction"] < ALPHA
     )
+
     dir_sig["is_direction_excited"] = (
         dir_sig["is_direction_response_significant"]
         & (dir_sig["mean_moving_minus_baseline"] > 0)
     )
+
     dir_sig["is_direction_suppressed"] = (
         dir_sig["is_direction_response_significant"]
         & (dir_sig["mean_moving_minus_baseline"] < 0)
     )
 
-    # Merge speed-specific tuning metrics from SB05.
-    merge_cols = ["unit_id", "speed"]
-    if not all(c in unit_tuning.columns for c in merge_cols):
-        raise ValueError("unit_tuning_summary.csv must contain unit_id and speed.")
-
-    sig = sig.merge(unit_tuning, on=merge_cols, how="left")
-
-    # -----------------------------
-    # Save
-    # -----------------------------
+    # Merge tuning metrics from 05 if available
+    sig = sig.merge(
+        unit_tuning,
+        on="unit_id",
+        how="left",
+    )
 
     unit_sig_path = ANALYSIS_OUTPUT_DIR / "unit_significance_summary.csv"
     dir_sig_path = ANALYSIS_OUTPUT_DIR / "unit_direction_significance.csv"
@@ -280,7 +274,7 @@ def main():
     print(unit_sig_path)
     print(dir_sig_path)
 
-    print("\nUnit × speed summary counts:")
+    print("\nSummary counts:")
     print("Motion-baseline responsive:", int(sig["is_motion_baseline_responsive"].sum()))
     print("Motion-baseline suppressed:", int(sig["is_motion_baseline_suppressed"].sum()))
     print("Direction tuned:", int(sig["is_direction_tuned_motion_baseline"].sum()))
@@ -290,11 +284,8 @@ def main():
     print("Excited direction responses:", int(dir_sig["is_direction_excited"].sum()))
     print("Suppressed direction responses:", int(dir_sig["is_direction_suppressed"].sum()))
 
-    print("\nFirst few unit × speed rows:")
+    print("\nFirst few rows:")
     print(sig.head())
-
-    print("\nFirst few unit × speed × direction rows:")
-    print(dir_sig.head())
 
 
 if __name__ == "__main__":

@@ -1,6 +1,18 @@
-# 06_plot_units.py
-
-from pathlib import Path
+# SB11_plot_units_single_screen_speed_split.py
+#
+# Unit-level plots for single-screen 8-direction / 2-speed stimulus.
+#
+# This version assumes ALL summaries are speed-specific:
+#   unit_trial_summary.csv              unit × trial, with speed column
+#   unit_condition_summary.csv          unit × speed × direction
+#   unit_tuning_summary.csv             unit × speed
+#   unit_significance_summary.csv       unit × speed
+#   unit_direction_significance.csv     unit × speed × direction
+#
+# For each unit, the PDF contains a complete set of pages for each speed:
+#   1. raster by direction for that speed
+#   2. PSTH by direction for that speed
+#   3. signed response + polar plots + speed-specific summary
 
 import numpy as np
 import pandas as pd
@@ -14,18 +26,22 @@ from SB0_config_analysis import ANALYSIS_OUTPUT_DIR
 # Plot settings
 # =====================
 
-# "all" or "significant"
-PLOT_MODE = "all"
+PLOT_MODE = "all"  # "all" or "significant"
 
-# Used only when PLOT_MODE == "significant"
 SIGNIFICANCE_COLUMNS = [
     "is_motion_baseline_responsive",
     "is_motion_baseline_suppressed",
     "is_direction_tuned_motion_baseline",
 ]
 
-TIME_RANGE = (-5.0, 6.0)
+TIME_RANGE = (-3.0, 5.0)
 BIN_WIDTH = 0.1
+PSTH_DIRECTION_N_COLS = 4
+
+
+# =====================
+# Helpers
+# =====================
 
 
 def sem(x):
@@ -35,166 +51,37 @@ def sem(x):
     return np.std(x, ddof=1) / np.sqrt(len(x))
 
 
-def get_units_to_plot(units, sig):
-    """Choose all units or only significant units."""
-    if PLOT_MODE == "all":
-        return units["unit_id"].tolist()
-
-    if PLOT_MODE == "significant":
-        if sig is None:
-            raise FileNotFoundError(
-                "unit_significance_summary.csv not found, "
-                "but PLOT_MODE='significant'. Run 05b first."
-            )
-
-        mask = np.zeros(len(sig), dtype=bool)
-
-        for col in SIGNIFICANCE_COLUMNS:
-            if col in sig.columns:
-                mask |= sig[col].fillna(False).astype(bool)
-
-        return sig.loc[mask, "unit_id"].tolist()
-
-    raise ValueError("PLOT_MODE must be 'all' or 'significant'.")
+def format_value(x, ndigits=3):
+    if pd.isna(x):
+        return "nan"
+    if isinstance(x, (int, np.integer)):
+        return str(x)
+    if isinstance(x, (float, np.floating)):
+        return f"{x:.{ndigits}f}"
+    return str(x)
 
 
-def plot_raster(ax, labeled_unit, directions):
-    """Raster plot grouped by direction, using thin vertical lines."""
-    y = 0
-    yticks = []
-    ylabels = []
-
-    for direction in directions:
-        df_dir = labeled_unit[labeled_unit["direction"] == direction]
-
-        for trial_id, df_trial in df_dir.groupby("trial_id"):
-            spike_times = df_trial["time_from_moving_onset"].values
-            ax.vlines(
-                spike_times,
-                y - 0.4,
-                y + 0.4,
-                linewidth=0.5,
-            )
-            y += 1
-
-        if len(df_dir) > 0:
-            yticks.append(y - 0.5)
-            ylabels.append(str(direction))
-
-    ax.axvline(0, linestyle="--", linewidth=1)
-    ax.set_xlim(TIME_RANGE)
-    ax.set_xlabel("Time from moving onset (s)")
-    ax.set_ylabel("Direction / trials")
-    ax.set_yticks(yticks)
-    ax.set_yticklabels(ylabels)
-    ax.set_title("Raster aligned to moving onset")
+def direction_label(direction):
+    try:
+        d = float(direction)
+        if d.is_integer():
+            return str(int(d))
+        return str(d)
+    except Exception:
+        return str(direction)
 
 
-def plot_psth(ax, labeled_unit, directions):
-    """PSTH by direction."""
-    bins = np.arange(TIME_RANGE[0], TIME_RANGE[1] + BIN_WIDTH, BIN_WIDTH)
-    centers = bins[:-1] + BIN_WIDTH / 2
-
-    for direction in directions:
-        df_dir = labeled_unit[labeled_unit["direction"] == direction]
-        n_trials = df_dir["trial_id"].nunique()
-
-        if n_trials == 0:
-            continue
-
-        counts, _ = np.histogram(df_dir["time_from_moving_onset"], bins=bins)
-        fr = counts / n_trials / BIN_WIDTH
-
-        ax.plot(centers, fr, label=str(direction))
-
-    ax.axvline(0, linestyle="--", linewidth=1)
-    ax.set_xlim(TIME_RANGE)
-    ax.set_xlabel("Time from moving onset (s)")
-    ax.set_ylabel("Firing rate (spikes/s)")
-    ax.set_title("PSTH by direction")
-    ax.legend(title="Direction", fontsize=8)
-
-
-def plot_signed_motion_baseline_response(ax, trial_unit, dir_sig_unit=None):
-    """
-    Direction response using signed moving - baseline FR.
-
-    Shows:
-    - trial dots
-    - mean ± SEM
-    - zero line
-    - optional significance markers from unit_direction_significance.csv
-    """
-    df = trial_unit[["direction", "trial_id", "moving_minus_baseline"]].dropna().copy()
-
-    if df.empty:
-        ax.set_title("Motion - baseline response")
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
-        return
-
-    directions = sorted(df["direction"].unique())
-
-    summary = (
-        df.groupby("direction", dropna=False)["moving_minus_baseline"]
-        .agg(mean="mean", sem=sem)
-        .reindex(directions)
-        .reset_index()
-    )
-
-    x = np.arange(len(directions))
-
-    rng = np.random.default_rng(42)
-
-    for i, direction in enumerate(directions):
-        vals = df.loc[df["direction"] == direction, "moving_minus_baseline"].values
-        jitter = rng.uniform(-0.08, 0.08, size=len(vals))
-
-        ax.scatter(
-            np.full(len(vals), i) + jitter,
-            vals,
-            s=22,
-            alpha=0.7,
-        )
-
-    ax.errorbar(
-        x,
-        summary["mean"].values,
-        yerr=summary["sem"].values,
-        fmt="-o",
-        capsize=4,
-        linewidth=1.5,
-    )
-
-    ax.axhline(0, linewidth=1)
-
-    # Optional direction-level significance markers
-    if dir_sig_unit is not None and not dir_sig_unit.empty:
-        y_max = np.nanmax(summary["mean"].values + summary["sem"].values)
-        y_min = np.nanmin(summary["mean"].values - summary["sem"].values)
-        y_range = y_max - y_min if y_max > y_min else 1
-
-        for i, direction in enumerate(directions):
-            row = dir_sig_unit.loc[dir_sig_unit["direction"] == direction]
-
-            if row.empty:
-                continue
-
-            r = row.iloc[0]
-
-            if bool(r.get("is_direction_excited", False)):
-                ax.text(i, y_max + 0.08 * y_range, "*", ha="center", va="bottom", fontsize=14)
-
-            elif bool(r.get("is_direction_suppressed", False)):
-                ax.text(i, y_min - 0.08 * y_range, "*", ha="center", va="top", fontsize=14)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels([str(int(d)) if float(d).is_integer() else str(d) for d in directions])
-    ax.set_xlabel("Direction")
-    ax.set_ylabel("Moving - baseline FR")
-    ax.set_title("Signed motion-baseline response\n(trials + mean ± SEM)")
+def sorted_unique_nonnull(values):
+    vals = pd.Series(values).dropna().unique().tolist()
+    try:
+        return sorted(vals)
+    except Exception:
+        return vals
 
 
 def close_polar(theta, r):
+    theta = np.asarray(theta)
+    r = np.asarray(r)
     if len(theta) == 0:
         return theta, r
     return np.r_[theta, theta[0]], np.r_[r, r[0]]
@@ -208,18 +95,190 @@ def format_polar_axis(ax, title):
     ax.set_title(title)
 
 
-def plot_moving_fr_polar(ax, direction_unit):
-    """
-    Polar plot of pure moving firing rate.
+def ensure_speed_column(df, table_name):
+    if "speed" not in df.columns:
+        raise ValueError(f"{table_name} must contain a 'speed' column for speed-specific plotting.")
 
-    This is especially important for mixed excited/suppressed neurons.
-    """
-    df = (
-        direction_unit[["direction", "moving_fr"]]
-        .dropna()
-        .sort_values("direction")
-        .copy()
+
+def get_units_to_plot(units, sig):
+    if PLOT_MODE == "all":
+        return units["unit_id"].tolist()
+
+    if PLOT_MODE == "significant":
+        if sig is None:
+            raise FileNotFoundError("unit_significance_summary.csv not found.")
+
+        mask = np.zeros(len(sig), dtype=bool)
+        for col in SIGNIFICANCE_COLUMNS:
+            if col in sig.columns:
+                mask |= sig[col].fillna(False).astype(bool)
+
+        return sorted_unique_nonnull(sig.loc[mask, "unit_id"])
+
+    raise ValueError("PLOT_MODE must be 'all' or 'significant'.")
+
+
+def filter_unit_speed(df, unit_id, speed):
+    if df is None or df.empty:
+        return pd.DataFrame()
+    return df[(df["unit_id"] == unit_id) & (df["speed"] == speed)].copy()
+
+
+# =====================
+# Raster / PSTH
+# =====================
+
+
+def plot_raster_by_speed(ax, labeled_unit_speed, directions, speed):
+    """Raster plot grouped by direction for one speed."""
+    y = 0
+    yticks = []
+    ylabels = []
+
+    for direction in directions:
+        df_dir = labeled_unit_speed[labeled_unit_speed["direction"] == direction]
+
+        for trial_id, df_trial in df_dir.groupby("trial_id"):
+            spike_times = df_trial["time_from_moving_onset"].values
+            ax.vlines(spike_times, y - 0.4, y + 0.4, linewidth=0.5)
+            y += 1
+
+        if len(df_dir) > 0:
+            yticks.append(y - 0.5)
+            ylabels.append(direction_label(direction))
+
+    ax.axvline(0, linestyle="--", linewidth=1)
+    ax.set_xlim(TIME_RANGE)
+    ax.set_xlabel("Time from moving onset (s)")
+    ax.set_ylabel("Direction / trials")
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(ylabels)
+    ax.set_title(f"Raster aligned to moving onset\nspeed = {speed}")
+
+
+def plot_psth_combined(ax, labeled_unit_speed, directions, speed):
+    """Combined PSTH for one speed: one line per direction."""
+    bins = np.arange(TIME_RANGE[0], TIME_RANGE[1] + BIN_WIDTH, BIN_WIDTH)
+    centers = bins[:-1] + BIN_WIDTH / 2
+
+    for direction in directions:
+        df_dir = labeled_unit_speed[labeled_unit_speed["direction"] == direction]
+        n_trials = df_dir["trial_id"].nunique()
+        if n_trials == 0:
+            continue
+        counts, _ = np.histogram(df_dir["time_from_moving_onset"], bins=bins)
+        fr = counts / n_trials / BIN_WIDTH
+        ax.plot(centers, fr, label=direction_label(direction))
+
+    ax.axvline(0, linestyle="--", linewidth=1)
+    ax.set_xlim(TIME_RANGE)
+    ax.set_xlabel("Time from moving onset (s)")
+    ax.set_ylabel("Firing rate (spikes/s)")
+    ax.set_title(f"PSTH by direction\nspeed = {speed}")
+    ax.legend(title="Direction", fontsize=7, ncol=2)
+
+
+def plot_psth_separated(fig, gs_cell, labeled_unit_speed, directions):
+    """Small multiples: one PSTH panel per direction for one speed."""
+    n = len(directions)
+    n_cols = min(PSTH_DIRECTION_N_COLS, max(1, n))
+    n_rows = int(np.ceil(n / n_cols))
+    sub_gs = gs_cell.subgridspec(n_rows, n_cols, hspace=0.45, wspace=0.35)
+
+    bins = np.arange(TIME_RANGE[0], TIME_RANGE[1] + BIN_WIDTH, BIN_WIDTH)
+    centers = bins[:-1] + BIN_WIDTH / 2
+
+    for i, direction in enumerate(directions):
+        ax = fig.add_subplot(sub_gs[i // n_cols, i % n_cols])
+        df_dir = labeled_unit_speed[labeled_unit_speed["direction"] == direction]
+        n_trials = df_dir["trial_id"].nunique()
+
+        if n_trials > 0:
+            counts, _ = np.histogram(df_dir["time_from_moving_onset"], bins=bins)
+            fr = counts / n_trials / BIN_WIDTH
+            ax.plot(centers, fr)
+
+        ax.axvline(0, linestyle="--", linewidth=1)
+        ax.set_xlim(TIME_RANGE)
+        ax.set_title(f"{direction_label(direction)}°", fontsize=10)
+
+        if i // n_cols == n_rows - 1:
+            ax.set_xlabel("Time (s)")
+        if i % n_cols == 0:
+            ax.set_ylabel("FR")
+
+    for j in range(n, n_rows * n_cols):
+        ax = fig.add_subplot(sub_gs[j // n_cols, j % n_cols])
+        ax.axis("off")
+
+
+# =====================
+# Response / polar plots
+# =====================
+
+
+def plot_signed_motion_baseline_response(ax, trial_unit_speed, dir_sig_unit_speed=None):
+    """Signed moving-baseline response by direction for one speed."""
+    df = trial_unit_speed[["direction", "trial_id", "moving_minus_baseline"]].dropna().copy()
+
+    if df.empty:
+        ax.set_title("Signed motion-baseline response")
+        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        return
+
+    directions = sorted_unique_nonnull(df["direction"])
+    summary = (
+        df.groupby("direction", dropna=False)["moving_minus_baseline"]
+        .agg(mean="mean", sem=sem)
+        .reindex(directions)
+        .reset_index()
     )
+
+    x = np.arange(len(directions))
+    rng = np.random.default_rng(42)
+
+    for i, direction in enumerate(directions):
+        vals = df.loc[df["direction"] == direction, "moving_minus_baseline"].values
+        jitter = rng.uniform(-0.08, 0.08, size=len(vals))
+        ax.scatter(np.full(len(vals), i) + jitter, vals, s=22, alpha=0.7)
+
+    ax.errorbar(
+        x,
+        summary["mean"].values,
+        yerr=summary["sem"].values,
+        fmt="-o",
+        capsize=4,
+        linewidth=1.5,
+    )
+    ax.axhline(0, linewidth=1)
+
+    if dir_sig_unit_speed is not None and not dir_sig_unit_speed.empty:
+        y_upper = summary["mean"].values + summary["sem"].values
+        y_lower = summary["mean"].values - summary["sem"].values
+        y_max = np.nanmax(y_upper) if len(y_upper) else 1
+        y_min = np.nanmin(y_lower) if len(y_lower) else -1
+        y_range = y_max - y_min if y_max > y_min else 1
+
+        for i, direction in enumerate(directions):
+            row = dir_sig_unit_speed.loc[dir_sig_unit_speed["direction"] == direction]
+            if row.empty:
+                continue
+            r = row.iloc[0]
+            if bool(r.get("is_direction_excited", False)):
+                ax.text(i, y_max + 0.08 * y_range, "*", ha="center", va="bottom", fontsize=14)
+            elif bool(r.get("is_direction_suppressed", False)):
+                ax.text(i, y_min - 0.08 * y_range, "*", ha="center", va="top", fontsize=14)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([direction_label(d) for d in directions])
+    ax.set_xlabel("Direction")
+    ax.set_ylabel("Moving - baseline FR")
+    ax.set_title("Signed motion-baseline response\ntrials + mean ± SEM")
+
+
+def plot_moving_fr_polar(ax, condition_unit_speed):
+    """Pure moving firing-rate polar plot for one speed."""
+    df = condition_unit_speed[["direction", "moving_fr"]].dropna().sort_values("direction").copy()
 
     if df.empty:
         ax.set_title("Pure moving FR polar")
@@ -227,36 +286,27 @@ def plot_moving_fr_polar(ax, direction_unit):
 
     theta = np.deg2rad(df["direction"].astype(float).values)
     r = df["moving_fr"].clip(lower=0).values
-
     theta_c, r_c = close_polar(theta, r)
 
     ax.plot(theta_c, r_c, marker="o", linewidth=1.8)
     ax.fill(theta_c, r_c, alpha=0.15)
-
     format_polar_axis(ax, "Pure moving FR polar")
 
 
-def plot_signed_components_polar(ax, direction_unit, dir_sig_unit=None):
+def plot_signed_components_polar(ax, condition_unit_speed, dir_sig_unit_speed=None):
     """
-    Polar plot splitting motion-baseline response into:
-    - positive component: max(moving-baseline, 0)
-    - negative/suppression strength: max(-(moving-baseline), 0)
+    Positive/suppression split polar for one speed.
 
-    Negative component is plotted as positive radius, but represents suppression.
+    excitation radius   = max(moving-baseline, 0)
+    suppression radius  = max(-(moving-baseline), 0)
     """
-    required_cols = [
-        "direction",
-        "motion_baseline_positive",
-        "motion_baseline_negative_strength",
-    ]
-
-    df = direction_unit[required_cols].dropna(subset=["direction"]).copy()
+    df = condition_unit_speed[
+        ["direction", "motion_baseline_positive", "motion_baseline_negative_strength"]
+    ].dropna(subset=["direction"]).sort_values("direction").copy()
 
     if df.empty:
         ax.set_title("Motion-baseline components")
         return
-
-    df = df.sort_values("direction")
 
     theta = np.deg2rad(df["direction"].astype(float).values)
     pos_r = df["motion_baseline_positive"].clip(lower=0).values
@@ -271,430 +321,341 @@ def plot_signed_components_polar(ax, direction_unit, dir_sig_unit=None):
     ax.plot(theta_c, neg_c, marker="o", linewidth=1.8, label="suppression")
     ax.fill(theta_c, neg_c, alpha=0.12)
 
-    # Optional significant direction markers
-    if dir_sig_unit is not None and not dir_sig_unit.empty:
-        for _, r in dir_sig_unit.iterrows():
-            direction = r["direction"]
+    if dir_sig_unit_speed is not None and not dir_sig_unit_speed.empty:
+        for _, sig_row in dir_sig_unit_speed.iterrows():
+            direction = sig_row["direction"]
+            match = df.loc[df["direction"] == direction]
+            if match.empty:
+                continue
             theta_sig = np.deg2rad(float(direction))
 
-            if bool(r.get("is_direction_excited", False)):
-                radius = df.loc[df["direction"] == direction, "motion_baseline_positive"]
-                if len(radius) > 0:
-                    ax.scatter([theta_sig], [float(radius.iloc[0])], s=80, marker="*")
+            if bool(sig_row.get("is_direction_excited", False)):
+                radius = float(match.iloc[0]["motion_baseline_positive"])
+                ax.scatter([theta_sig], [radius], s=80, marker="*")
 
-            if bool(r.get("is_direction_suppressed", False)):
-                radius = df.loc[df["direction"] == direction, "motion_baseline_negative_strength"]
-                if len(radius) > 0:
-                    ax.scatter([theta_sig], [float(radius.iloc[0])], s=80, marker="*")
+            if bool(sig_row.get("is_direction_suppressed", False)):
+                radius = float(match.iloc[0]["motion_baseline_negative_strength"])
+                ax.scatter([theta_sig], [radius], s=80, marker="*")
 
     format_polar_axis(ax, "Motion-baseline components\npositive vs suppression")
     ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15), fontsize=8)
 
 
-def plot_psth_separated(fig, gs_cell, labeled_unit, directions):
-    """Small multiples: one PSTH panel per direction."""
-    n = len(directions)
-
-    if n <= 4:
-        n_rows, n_cols = 2, 2
-    elif n <= 8:
-        n_rows, n_cols = 2, 4
-    else:
-        n_rows, n_cols = 3, 4
-
-    sub_gs = gs_cell.subgridspec(n_rows, n_cols, hspace=0.45, wspace=0.35)
-
-    bins = np.arange(TIME_RANGE[0], TIME_RANGE[1] + BIN_WIDTH, BIN_WIDTH)
-    centers = bins[:-1] + BIN_WIDTH / 2
-
-    axes = []
-
-    for i, direction in enumerate(directions):
-        ax = fig.add_subplot(sub_gs[i // n_cols, i % n_cols])
-        axes.append(ax)
-
-        df_dir = labeled_unit[labeled_unit["direction"] == direction]
-        n_trials = df_dir["trial_id"].nunique()
-
-        if n_trials > 0:
-            counts, _ = np.histogram(df_dir["time_from_moving_onset"], bins=bins)
-            fr = counts / n_trials / BIN_WIDTH
-            ax.plot(centers, fr)
-
-        ax.axvline(0, linestyle="--", linewidth=1)
-        ax.set_xlim(TIME_RANGE)
-        ax.set_title(f"{direction}°", fontsize=10)
-
-        if i // n_cols == n_rows - 1:
-            ax.set_xlabel("Time (s)")
-        if i % n_cols == 0:
-            ax.set_ylabel("FR")
-
-    return axes
-
-
-def sem(x):
-    x = pd.Series(x).dropna().to_numpy(dtype=float)
-    if len(x) <= 1:
-        return 0.0
-    return np.std(x, ddof=1) / np.sqrt(len(x))
-
-
-def plot_condition_response(ax, trial_unit):
-    """
-    Plot moving-static response by direction with:
-    - individual trial dots
-    - mean ± SEM
-    """
-    df = trial_unit[["direction", "trial_id", "moving_minus_static"]].dropna().copy()
+def plot_baseline_static_moving_polar(ax, condition_unit_speed):
+    """Baseline/static/moving FR context polar for one speed."""
+    df = condition_unit_speed[
+        ["direction", "baseline_fr", "static_fr", "moving_fr"]
+    ].dropna(subset=["direction"]).sort_values("direction").copy()
 
     if df.empty:
-        ax.set_title("Motion-specific response")
-        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        ax.set_title("Baseline/static/moving FR")
         return
 
-    directions = sorted(df["direction"].unique())
-    summary = (
-        df.groupby("direction", dropna=False)["moving_minus_static"]
-        .agg(mean="mean", sem=sem)
-        .reindex(directions)
-        .reset_index()
-    )
+    theta = np.deg2rad(df["direction"].astype(float).values)
+    theta_c, _ = close_polar(theta, np.zeros(len(theta)))
 
-    x = np.arange(len(directions))
+    for col in ["baseline_fr", "static_fr", "moving_fr"]:
+        r = df[col].clip(lower=0).values
+        _, r_c = close_polar(theta, r)
+        ax.plot(theta_c, r_c, marker="o", linewidth=1.5, label=col)
+        ax.fill(theta_c, r_c, alpha=0.08)
 
-    # plot individual trial dots
-    rng = np.random.default_rng(42)
-    for i, direction in enumerate(directions):
-        vals = df.loc[df["direction"] == direction, "moving_minus_static"].values
-        jitter = rng.uniform(-0.08, 0.08, size=len(vals))
-        ax.scatter(
-            np.full(len(vals), i) + jitter,
-            vals,
-            s=25,
-            alpha=0.8,
-        )
-
-    # plot mean ± SEM
-    ax.errorbar(
-        x,
-        summary["mean"].values,
-        yerr=summary["sem"].values,
-        fmt="-o",
-        capsize=4,
-        linewidth=1.5,
-    )
-
-    ax.axhline(0, linewidth=1)
-    ax.set_xticks(x)
-    ax.set_xticklabels([str(d) for d in directions])
-    ax.set_xlabel("Direction")
-    ax.set_ylabel("Moving - static FR")
-    ax.set_title("Motion-specific response\n(trials + mean ± SEM)")
-
-
-def plot_condition_response_polar(ax, trial_unit, condition_unit):
-    """
-    Polar map showing:
-    - static FR as translucent background
-    - moving FR as translucent background
-    - moving-static response as trial dots + mean ± SEM
-    """
-    cond = (
-        condition_unit[
-            ["direction", "static_fr", "moving_fr", "moving_minus_static"]
-        ]
-        .dropna(subset=["direction"])
-        .groupby("direction", as_index=False)
-        .mean()
-        .sort_values("direction")
-    )
-
-    trial = (
-        trial_unit[
-            ["direction", "trial_id", "moving_minus_static"]
-        ]
-        .dropna(subset=["direction", "moving_minus_static"])
-        .copy()
-    )
-
-    if cond.empty:
-        ax.set_title("Motion-specific polar response")
-        return
-
-    directions = cond["direction"].astype(float).values
-    theta = np.deg2rad(directions)
-
-    # Background FR layers: static and moving should be non-negative.
-    static_r = cond["static_fr"].clip(lower=0).values
-    moving_r = cond["moving_fr"].clip(lower=0).values
-
-    theta_closed = np.r_[theta, theta[0]]
-    static_closed = np.r_[static_r, static_r[0]]
-    moving_closed = np.r_[moving_r, moving_r[0]]
-
-    ax.fill(theta_closed, static_closed, alpha=0.15, label="static FR")
-    ax.fill(theta_closed, moving_closed, alpha=0.15, label="moving FR")
-
-    # Main layer: moving - static, with trial dots + mean ± SEM.
-    summary = (
-        trial.groupby("direction")["moving_minus_static"]
-        .agg(mean="mean", sem=sem)
-        .reindex(directions)
-        .reset_index()
-    )
-
-    # Polar radius cannot show negative values naturally.
-    # For plotting radius, clip negative motion-specific responses to 0.
-    mean_r = summary["mean"].clip(lower=0).values
-    sem_r = summary["sem"].values
-
-    mean_closed = np.r_[mean_r, mean_r[0]]
-    ax.plot(theta_closed, mean_closed, marker="o", linewidth=1.8, label="moving - static")
-
-    ax.errorbar(
-        theta,
-        mean_r,
-        yerr=sem_r,
-        fmt="none",
-        capsize=3,
-        linewidth=1,
-    )
-
-    # Trial dots with slight angular jitter
-    rng = np.random.default_rng(42)
-
-    for direction in directions:
-        vals = trial.loc[
-            trial["direction"].astype(float) == direction,
-            "moving_minus_static",
-        ].values
-
-        vals = np.clip(vals, 0, None)
-
-        if len(vals) == 0:
-            continue
-
-        theta_jitter = np.deg2rad(
-            direction + rng.uniform(-3, 3, size=len(vals))
-        )
-
-        ax.scatter(
-            theta_jitter,
-            vals,
-            s=18,
-            alpha=0.7,
-        )
-
-    ax.set_theta_zero_location("E")
-    ax.set_theta_direction(-1)
-    ax.set_xticks(np.deg2rad([0, 90, 180, 270]))
-    ax.set_xticklabels(["0", "90", "180", "270"])
-    ax.set_title("Static / moving / motion-specific response")
+    format_polar_axis(ax, "Baseline / static / moving FR")
     ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15), fontsize=8)
 
 
-def add_summary_text(ax, unit_id, tuning_row, sig_row):
-    """Add unit-level summary text."""
-    ax.axis("off")
+# =====================
+# Summary text
+# =====================
 
-    lines = [f"Unit {unit_id}"]
+
+def add_summary_text(ax, unit_id, speed_value, tuning_row, sig_row, dir_sig_speed):
+    ax.axis("off")
+    lines = [f"Unit {unit_id}", f"Speed: {speed_value}"]
 
     if tuning_row is not None and len(tuning_row) > 0:
         r = tuning_row.iloc[0]
-
         lines += [
             "",
             f"Class: {r.get('response_class', 'NA')}",
             f"PD method: {r.get('pd_method', 'NA')}",
+            f"Positive dirs: {format_value(r.get('n_positive_directions', np.nan), 0)}",
+            f"Negative dirs: {format_value(r.get('n_negative_directions', np.nan), 0)}",
             "",
-            f"Mean baseline FR: {r.get('mean_baseline_fr', np.nan):.2f}",
-            f"Mean static FR: {r.get('mean_static_fr', np.nan):.2f}",
-            f"Mean moving FR: {r.get('mean_moving_fr', np.nan):.2f}",
-            f"Mean moving-baseline: {r.get('mean_moving_minus_baseline', np.nan):.2f}",
+            f"Mean baseline FR: {format_value(r.get('mean_baseline_fr', np.nan), 2)}",
+            f"Mean static FR: {format_value(r.get('mean_static_fr', np.nan), 2)}",
+            f"Mean moving FR: {format_value(r.get('mean_moving_fr', np.nan), 2)}",
+            f"Mean moving-baseline: {format_value(r.get('mean_moving_minus_baseline', np.nan), 2)}",
             "",
-            f"Primary PD: {r.get('preferred_direction', np.nan)}",
-            f"Primary DSI: {r.get('dsi', np.nan):.3f}",
-            f"Vector strength: {r.get('vector_strength', np.nan):.3f}",
+            f"Primary PD: {format_value(r.get('preferred_direction', np.nan), 2)}",
+            f"Primary DSI: {format_value(r.get('dsi', np.nan), 3)}",
+            f"Vector strength: {format_value(r.get('vector_strength', np.nan), 3)}",
             "",
-            f"Moving FR PD: {r.get('moving_fr_preferred_direction', np.nan)}",
-            f"Moving FR DSI: {r.get('moving_fr_dsi', np.nan):.3f}",
-            f"Excitation PD: {r.get('excitation_preferred_direction', np.nan)}",
-            f"Suppression PD: {r.get('suppression_preferred_direction', np.nan)}",
+            f"Moving FR PD: {format_value(r.get('moving_fr_preferred_direction', np.nan), 2)}",
+            f"Moving FR DSI: {format_value(r.get('moving_fr_dsi', np.nan), 3)}",
+            f"Excitation PD: {format_value(r.get('excitation_preferred_direction', np.nan), 2)}",
+            f"Excitation DSI: {format_value(r.get('excitation_dsi', np.nan), 3)}",
+            f"Suppression PD: {format_value(r.get('suppression_preferred_direction', np.nan), 2)}",
+            f"Suppression DSI: {format_value(r.get('suppression_dsi', np.nan), 3)}",
         ]
 
     if sig_row is not None and len(sig_row) > 0:
         r = sig_row.iloc[0]
+        lines += [
+            "",
+            f"p motion-baseline 2s: {format_value(r.get('p_motion_baseline_two_sided', np.nan), 4)}",
+            f"p responsive: {format_value(r.get('p_motion_baseline_responsive', np.nan), 4)}",
+            f"p suppressed: {format_value(r.get('p_motion_baseline_suppressed', np.nan), 4)}",
+            f"p direction tuning: {format_value(r.get('p_direction_tuning_motion_baseline', np.nan), 4)}",
+            "",
+            f"q motion-baseline: {format_value(r.get('q_motion_baseline', np.nan), 4)}",
+            f"q direction tuning: {format_value(r.get('q_direction_tuning_motion_baseline', np.nan), 4)}",
+        ]
+
+    if dir_sig_speed is not None and not dir_sig_speed.empty:
+        n_sig = int(dir_sig_speed.get("is_direction_response_significant", pd.Series(False)).fillna(False).sum())
+        n_exc = int(dir_sig_speed.get("is_direction_excited", pd.Series(False)).fillna(False).sum())
+        n_sup = int(dir_sig_speed.get("is_direction_suppressed", pd.Series(False)).fillna(False).sum())
 
         lines += [
             "",
-            f"p motion-baseline 2s: {r.get('p_motion_baseline_two_sided', np.nan):.4f}",
-            f"p responsive: {r.get('p_motion_baseline_responsive', np.nan):.4f}",
-            f"p suppressed: {r.get('p_motion_baseline_suppressed', np.nan):.4f}",
-            f"p direction tuning: {r.get('p_direction_tuning_motion_baseline', np.nan):.4f}",
+            f"Significant directions: {n_sig}",
+            f"Excited directions: {n_exc}",
+            f"Suppressed directions: {n_sup}",
             "",
-            f"q motion-baseline: {r.get('q_motion_baseline', np.nan):.4f}",
-            f"q direction tuning: {r.get('q_direction_tuning_motion_baseline', np.nan):.4f}",
+            "Direction p/q, moving-baseline:",
         ]
 
-    ax.text(
-        0.02,
-        0.98,
-        "\n".join(lines),
-        va="top",
-        ha="left",
-        fontsize=9,
-    )
+        dtab = dir_sig_speed.copy()
+        dtab["direction"] = dtab["direction"].astype(float)
+        dtab = dtab.sort_values("direction")
+
+        for _, row in dtab.iterrows():
+            direction = row.get("direction", np.nan)
+            mean_resp = row.get("mean_moving_minus_baseline", np.nan)
+            p_val = row.get("p_motion_baseline_two_sided", np.nan)
+            q_val = row.get("q_motion_baseline_direction", np.nan)
+
+            sig_label = ""
+            if bool(row.get("is_direction_excited", False)):
+                sig_label = " exc"
+            elif bool(row.get("is_direction_suppressed", False)):
+                sig_label = " sup"
+
+            lines.append(
+                f"{format_value(direction, 0)}°: "
+                f"Δ={format_value(mean_resp, 2)}, "
+                f"p={format_value(p_val, 4)}, "
+                f"q={format_value(q_val, 4)}"
+                f"{sig_label}"
+            )
+
+    ax.text(0.02, 0.98, "\n".join(lines), va="top", ha="left", fontsize=8)
 
 
-def plot_one_unit(unit_id, labeled, trial_summary, condition_summary, direction_summary, tuning_summary, sig, dir_sig, out_dir):
-    """Create a two-page PDF summary for one unit."""
-    direction_unit = direction_summary[direction_summary["unit_id"] == unit_id]
-    dir_sig_unit = None if dir_sig is None else dir_sig[dir_sig["unit_id"] == unit_id]
-    directions = sorted(direction_unit["direction"].dropna().unique())
-    if len(directions) == 0:
-        directions = sorted(condition_unit["direction"].dropna().unique())
-    labeled_unit = labeled[labeled["unit_id"] == unit_id]
-    trial_unit = trial_summary[trial_summary["unit_id"] == unit_id]
-    condition_unit = condition_summary[condition_summary["unit_id"] == unit_id]
+# =====================
+# Unit PDF
+# =====================
 
-    if labeled_unit.empty or condition_unit.empty:
-        print(f"Skipping unit {unit_id}: no labeled spikes or condition summary.")
+
+def plot_one_unit(unit_id, labeled, trial_summary, condition_summary, tuning_summary, sig, dir_sig, out_dir):
+    labeled_unit = labeled[labeled["unit_id"] == unit_id].copy()
+    trial_unit = trial_summary[trial_summary["unit_id"] == unit_id].copy()
+    condition_unit = condition_summary[condition_summary["unit_id"] == unit_id].copy()
+
+    if labeled_unit.empty or trial_unit.empty or condition_unit.empty:
+        print(f"Skipping unit {unit_id}: missing labeled/trial/condition data.")
         return
 
-    directions = sorted(condition_unit["direction"].dropna().unique())
+    speeds = sorted_unique_nonnull(condition_unit["speed"])
+    if len(speeds) == 0:
+        print(f"Skipping unit {unit_id}: no speed values found.")
+        return
 
-    tuning_row = tuning_summary[tuning_summary["unit_id"] == unit_id]
-    sig_row = None if sig is None else sig[sig["unit_id"] == unit_id]
-
-    out_path = out_dir / f"unit_{unit_id}_summary.pdf"
+    out_path = out_dir / f"unit_{unit_id}_single_screen_speed_split_summary.pdf"
 
     with PdfPages(out_path) as pdf:
+        for speed in speeds:
+            labeled_speed = labeled_unit[labeled_unit["speed"] == speed].copy() if "speed" in labeled_unit.columns else labeled_unit.copy()
+            trial_speed = trial_unit[trial_unit["speed"] == speed].copy()
+            condition_speed = condition_unit[condition_unit["speed"] == speed].copy()
+            tuning_row = filter_unit_speed(tuning_summary, unit_id, speed)
+            sig_row = filter_unit_speed(sig, unit_id, speed) if sig is not None else None
+            dir_sig_speed = filter_unit_speed(dir_sig, unit_id, speed) if dir_sig is not None else None
 
-        # Page 1: raster only
-        fig1, ax1 = plt.subplots(figsize=(12, 8))
-        plot_raster(ax1, labeled_unit, directions)
-        fig1.suptitle(f"Unit {unit_id} raster", fontsize=14)
-        fig1.tight_layout()
-        pdf.savefig(fig1)
-        plt.close(fig1)
+            directions = sorted_unique_nonnull(condition_speed["direction"])
+            if len(directions) == 0:
+                continue
 
-        # Page 2: PSTH
-        fig2 = plt.figure(figsize=(18, 10))
-        gs2 = fig2.add_gridspec(2, 4)
+            # Page A: raster for this speed.
+            fig1, ax1 = plt.subplots(figsize=(12, 8))
+            plot_raster_by_speed(ax1, labeled_speed, directions, speed)
+            fig1.suptitle(f"Unit {unit_id} raster | speed = {speed}", fontsize=14)
+            fig1.tight_layout(rect=[0, 0, 1, 0.96])
+            pdf.savefig(fig1)
+            plt.close(fig1)
 
-        ax_psth_combined = fig2.add_subplot(gs2[0, 0])
-        plot_psth(ax_psth_combined, labeled_unit, directions)
+            # Page B: PSTH for this speed.
+            fig2 = plt.figure(figsize=(18, 10))
+            gs2 = fig2.add_gridspec(2, 5)
+            ax_combined = fig2.add_subplot(gs2[:, 0])
+            plot_psth_combined(ax_combined, labeled_speed, directions, speed)
+            plot_psth_separated(fig2, gs2[:, 1:], labeled_speed, directions)
+            fig2.suptitle(f"Unit {unit_id} PSTH | speed = {speed}", fontsize=14)
+            fig2.tight_layout(rect=[0, 0, 1, 0.96])
+            pdf.savefig(fig2)
+            plt.close(fig2)
 
-        plot_psth_separated(
-            fig=fig2,
-            gs_cell=gs2[:, 1:],
-            labeled_unit=labeled_unit,
-            directions=directions,
-        )
+            # Page C: response and polar summaries for this speed.
+            fig3 = plt.figure(figsize=(19, 11))
+            gs3 = fig3.add_gridspec(
+                2, 4,
+                width_ratios=[1.2, 1.1, 1.1, 1.1],
+                height_ratios=[1.0, 1.05],
+                wspace=0.45,
+                hspace=0.35,
+            )
 
-        fig2.suptitle(f"Unit {unit_id} PSTH summary", fontsize=14)
-        fig2.tight_layout()
-        pdf.savefig(fig2)
-        plt.close(fig2)
+            ax_signed = fig3.add_subplot(gs3[0, 0])
+            plot_signed_motion_baseline_response(ax_signed, trial_speed, dir_sig_speed)
 
-        # Page 3: tuning / direction response
-        fig3 = plt.figure(figsize=(18, 10))
-        gs3 = fig3.add_gridspec(2, 3)
+            ax_moving_polar = fig3.add_subplot(gs3[0, 1], projection="polar")
+            plot_moving_fr_polar(ax_moving_polar, condition_speed)
 
-        ax_signed = fig3.add_subplot(gs3[0, 0])
-        plot_signed_motion_baseline_response(
-            ax_signed,
-            trial_unit,
-            dir_sig_unit=dir_sig_unit,
-        )
+            ax_components = fig3.add_subplot(gs3[0, 2], projection="polar")
+            plot_signed_components_polar(ax_components, condition_speed, dir_sig_speed)
 
-        ax_moving_polar = fig3.add_subplot(gs3[0, 1], projection="polar")
-        plot_moving_fr_polar(ax_moving_polar, direction_unit)
+            ax_context = fig3.add_subplot(gs3[0, 3], projection="polar")
+            plot_baseline_static_moving_polar(ax_context, condition_speed)
 
-        ax_components = fig3.add_subplot(gs3[0, 2], projection="polar")
-        plot_signed_components_polar(
-            ax_components,
-            direction_unit,
-            dir_sig_unit=dir_sig_unit,
-        )
+            ax_text = fig3.add_subplot(gs3[1, 0:2])
+            add_summary_text(ax_text, unit_id, speed, tuning_row, sig_row, None)
 
-        ax_text = fig3.add_subplot(gs3[1, :])
-        add_summary_text(ax_text, unit_id, tuning_row, sig_row)
+            ax_dir_table = fig3.add_subplot(gs3[1, 2:4])
+            add_direction_pq_table(ax_dir_table, dir_sig_speed)
 
-        fig3.suptitle(f"Unit {unit_id} tuning / response summary", fontsize=14)
-        fig3.tight_layout()
-        pdf.savefig(fig3)
-        plt.close(fig3)
+            fig3.suptitle(f"Unit {unit_id} response summary | speed = {speed}", fontsize=14)
+            fig3.tight_layout(rect=[0, 0, 1, 0.96])
+            pdf.savefig(fig3)
+            plt.close(fig3)
 
-def plot_polar_tuning(ax, condition_unit):
+    print(f"Saved: {out_path}")
+
+
+def add_direction_pq_table(ax, dir_sig_speed):
     """
-    Polar tuning plot using condition-mean moving-static response.
+    Show direction-level moving-baseline p/q values as a compact table.
 
-    Note:
-    Polar radius cannot display negative values nicely, so we clip at 0.
-    Suppressed responses should still be interpreted mainly from the tuning curve
-    and summary text.
+    Each row:
+        direction
+        mean moving-baseline response
+        two-sided p value
+        FDR q value
+        label
     """
-    df = condition_unit[["direction", "moving_minus_static"]].dropna().copy()
+    ax.axis("off")
 
-    if df.empty:
-        ax.set_title("Polar tuning")
+    if dir_sig_speed is None or dir_sig_speed.empty:
+        ax.text(
+            0.02,
+            0.95,
+            "Direction p/q\nNo direction-level significance data",
+            va="top",
+            ha="left",
+            fontsize=9,
+        )
         return
 
-    df = (
-        df.groupby("direction", dropna=False)["moving_minus_static"]
-        .mean()
-        .reset_index()
-        .sort_values("direction")
+    dtab = dir_sig_speed.copy()
+    dtab["direction"] = dtab["direction"].astype(float)
+    dtab = dtab.sort_values("direction")
+
+    rows = []
+
+    for _, row in dtab.iterrows():
+        direction = row.get("direction", np.nan)
+        mean_resp = row.get("mean_moving_minus_baseline", np.nan)
+        p_val = row.get("p_motion_baseline_two_sided", np.nan)
+        q_val = row.get("q_motion_baseline_direction", np.nan)
+
+        label = ""
+        if bool(row.get("is_direction_excited", False)):
+            label = "exc"
+        elif bool(row.get("is_direction_suppressed", False)):
+            label = "sup"
+
+        rows.append([
+            f"{format_value(direction, 0)}°",
+            format_value(mean_resp, 2),
+            format_value(p_val, 4),
+            format_value(q_val, 4),
+            label,
+        ])
+
+    col_labels = ["Dir", "ΔMB", "p", "q", "Sig"]
+
+    table = ax.table(
+        cellText=rows,
+        colLabels=col_labels,
+        loc="center",
+        cellLoc="center",
+        colLoc="center",
+        bbox=[0.02, 0.02, 0.96, 0.86],
     )
 
-    # clip negative values for polar radius
-    df["response_for_polar"] = df["moving_minus_static"].clip(lower=0)
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    table.scale(1.0, 1.25)
 
-    if len(df) == 0:
-        ax.set_title("Polar tuning")
-        return
+    # Make header slightly clearer.
+    for (row_idx, col_idx), cell in table.get_celld().items():
+        if row_idx == 0:
+            cell.set_text_props(weight="bold")
 
-    theta = np.deg2rad(df["direction"].values)
-    r = df["response_for_polar"].values
+    ax.set_title("Direction-level moving-baseline test", fontsize=10)
 
-    # close the curve
-    theta = np.r_[theta, theta[0]]
-    r = np.r_[r, r[0]]
 
-    ax.plot(theta, r, marker="o")
-    ax.fill(theta, r, alpha=0.2)
-
-    ax.set_theta_zero_location("E")
-    ax.set_theta_direction(-1)
-    ax.set_xticks(np.deg2rad([0, 90, 180, 270]))
-    ax.set_xticklabels(["0", "90", "180", "270"])
-    ax.set_title("Polar tuning\n(max(0, moving-static))")
+# =====================
+# Main
+# =====================
 
 
 def main():
-    print("===== Plot unit summaries =====")
+    print("===== Plot speed-specific single-screen unit summaries =====")
     print(f"PLOT_MODE = {PLOT_MODE}")
 
-    plot_dir = ANALYSIS_OUTPUT_DIR / "plots" / "units"
+    plot_dir = ANALYSIS_OUTPUT_DIR / "plots" / "units_single_screen_speed_split"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
     labeled = pd.read_csv(ANALYSIS_OUTPUT_DIR / "labeled_spikes.csv")
     units = pd.read_csv(ANALYSIS_OUTPUT_DIR / "curated_units.csv")
     trial_summary = pd.read_csv(ANALYSIS_OUTPUT_DIR / "unit_trial_summary.csv")
     condition_summary = pd.read_csv(ANALYSIS_OUTPUT_DIR / "unit_condition_summary.csv")
-    direction_summary = pd.read_csv(ANALYSIS_OUTPUT_DIR / "unit_direction_summary.csv")
     tuning_summary = pd.read_csv(ANALYSIS_OUTPUT_DIR / "unit_tuning_summary.csv")
 
     sig_path = ANALYSIS_OUTPUT_DIR / "unit_significance_summary.csv"
-    sig = pd.read_csv(sig_path) if sig_path.exists() else None
-
     dir_sig_path = ANALYSIS_OUTPUT_DIR / "unit_direction_significance.csv"
+    sig = pd.read_csv(sig_path) if sig_path.exists() else None
     dir_sig = pd.read_csv(dir_sig_path) if dir_sig_path.exists() else None
 
-    units_to_plot = get_units_to_plot(units, sig)
+    for df in [labeled, trial_summary, condition_summary, tuning_summary, sig, dir_sig]:
+        if df is not None and "speed" in df.columns:
+            df["speed"] = df["speed"].astype(str).str.strip()
 
+    for name, df in [
+        ("labeled_spikes.csv", labeled),
+        ("unit_trial_summary.csv", trial_summary),
+        ("unit_condition_summary.csv", condition_summary),
+        ("unit_tuning_summary.csv", tuning_summary),
+    ]:
+        ensure_speed_column(df, name)
+
+    if sig is not None:
+        ensure_speed_column(sig, "unit_significance_summary.csv")
+    if dir_sig is not None:
+        ensure_speed_column(dir_sig, "unit_direction_significance.csv")
+
+    units_to_plot = get_units_to_plot(units, sig)
     print(f"Units to plot: {len(units_to_plot)}")
     print(units_to_plot)
 
@@ -704,7 +665,6 @@ def main():
             labeled=labeled,
             trial_summary=trial_summary,
             condition_summary=condition_summary,
-            direction_summary=direction_summary,
             tuning_summary=tuning_summary,
             sig=sig,
             dir_sig=dir_sig,

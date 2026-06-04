@@ -1,15 +1,4 @@
-# SB05_compute_tuning_summary_speed_split.py
-#
-# Speed-specific tuning summary for single-screen 8-direction / 2-speed stimulus.
-#
-# Main outputs:
-#   unit_trial_summary.csv              unit × trial
-#   unit_condition_summary.csv          unit × speed × direction
-#   unit_tuning_summary.csv             unit × speed, speed-specific response class / PD / DSI
-#   unit_speed_tuning_summary.csv       same as unit_tuning_summary.csv, explicit name
-#
-# Important:
-#   All tuning/classification metrics are computed separately for each speed.
+# 05_compute_tuning_summary.py
 
 import numpy as np
 import pandas as pd
@@ -22,15 +11,7 @@ from SB0_config_analysis import (
     MOVING_WINDOW,
 )
 
-
-# Small tolerance to avoid classifying tiny numerical/noise-level deviations as
-# true excitation or suppression. Adjust if needed.
-EPS = 0  # spikes/s
-
-
-# =====================
-# Helpers
-# =====================
+EPS = 0.1  # spikes/s, can adjust later
 
 
 def count_spikes_in_window(labeled, unit_id, trial_id, t0, t1):
@@ -56,10 +37,8 @@ def compute_vector_strength(direction_response):
     """
     Compute vector-sum preferred direction and vector strength.
 
-    direction_response must have columns:
-        direction, response
-
-    response should be non-negative for interpretability.
+    direction_response:
+        DataFrame with columns direction, response
     """
     df = direction_response.dropna(subset=["direction", "response"]).copy()
 
@@ -78,17 +57,42 @@ def compute_vector_strength(direction_response):
     return preferred_angle, vector_strength
 
 
+# def compute_dsi(direction_response):
+#     """
+#     Direction Selectivity Index:
+#     DSI = (R_pref - R_opp) / (R_pref + R_opp)
+
+#     Opposite direction is preferred + 180 degrees.
+#     """
+#     df = direction_response.dropna(subset=["direction", "response"]).copy()
+
+#     if df.empty:
+#         return np.nan
+
+#     df["direction"] = df["direction"].astype(float) % 360
+
+#     pref_row = df.loc[df["response"].idxmax()]
+#     pref_dir = pref_row["direction"]
+#     r_pref = pref_row["response"]
+
+#     opp_dir = (pref_dir + 180) % 360
+
+#     # Find the measured direction closest to the opposite direction
+#     df["opp_distance"] = np.abs(((df["direction"] - opp_dir + 180) % 360) - 180)
+#     r_opp = df.loc[df["opp_distance"].idxmin(), "response"]
+
+#     if (r_pref + r_opp) <= 0:
+#         return np.nan
+
+#     return (r_pref - r_opp) / (r_pref + r_opp)
+
 def compute_dsi_details(direction_response):
     """
-    Compute preferred direction, opposite direction, and DSI.
+    Compute DSI and return preferred/opposite direction details.
 
-    DSI = (R_pref - R_opp) / (R_pref + R_opp)
-
-    direction_response must have columns:
-        direction, response
-
-    response should be non-negative. For suppressed neurons, pass suppression
-    strength = max(-(moving-baseline), 0), not the signed negative response.
+    direction_response:
+        columns: direction, response
+        response must be non-negative for DSI interpretation.
     """
     df = direction_response.dropna(subset=["direction", "response"]).copy()
 
@@ -102,14 +106,15 @@ def compute_dsi_details(direction_response):
         return np.nan, np.nan, np.nan, np.nan, np.nan
 
     pref_row = df.loc[df["response"].idxmax()]
-    pref_dir = float(pref_row["direction"])
-    r_pref = float(pref_row["response"])
+    pref_dir = pref_row["direction"]
+    r_pref = pref_row["response"]
 
-    nominal_opp_dir = (pref_dir + 180) % 360
-    df["opp_distance"] = np.abs(((df["direction"] - nominal_opp_dir + 180) % 360) - 180)
+    opp_dir = (pref_dir + 180) % 360
+    df["opp_distance"] = np.abs(((df["direction"] - opp_dir + 180) % 360) - 180)
+
     opp_row = df.loc[df["opp_distance"].idxmin()]
-    measured_opp_dir = float(opp_row["direction"])
-    r_opp = float(opp_row["response"])
+    measured_opp_dir = opp_row["direction"]
+    r_opp = opp_row["response"]
 
     if (r_pref + r_opp) <= 0:
         dsi = np.nan
@@ -119,11 +124,23 @@ def compute_dsi_details(direction_response):
     return pref_dir, r_pref, measured_opp_dir, r_opp, dsi
 
 
-def classify_signed_response(df_speed_unit, eps=EPS):
+def classify_signed_response(direction_summary, eps=EPS):
     """
-    Classify one unit within one speed based on direction-mean moving-baseline.
+    Classify unit based on direction-mean moving_minus_baseline.
+
+    all_excited_or_nonnegative:
+        no clearly negative directions, at least one positive direction
+
+    all_suppressed_or_nonpositive:
+        no clearly positive directions, at least one negative direction
+
+    mixed_excited_and_suppressed:
+        at least one positive and one negative direction
+
+    flat_or_zero:
+        all directions are close to zero
     """
-    r = df_speed_unit["moving_minus_baseline"].dropna().to_numpy(dtype=float)
+    r = direction_summary["moving_minus_baseline"].dropna().to_numpy(dtype=float)
 
     if len(r) == 0:
         return "no_data", 0, 0
@@ -133,36 +150,18 @@ def classify_signed_response(df_speed_unit, eps=EPS):
 
     if n_pos > 0 and n_neg == 0:
         return "all_excited_or_nonnegative", n_pos, n_neg
+
     if n_neg > 0 and n_pos == 0:
         return "all_suppressed_or_nonpositive", n_pos, n_neg
+
     if n_pos > 0 and n_neg > 0:
         return "mixed_excited_and_suppressed", n_pos, n_neg
+
     return "flat_or_zero", n_pos, n_neg
 
 
-def first_existing_column(df, candidates):
-    for col in candidates:
-        if col in df.columns:
-            return col
-    return None
-
-
-def get_speed_value(trial_row):
-    """Use speed_label when available; otherwise speed."""
-    if "speed_label" in trial_row.index and not pd.isna(trial_row["speed_label"]):
-        return trial_row["speed_label"]
-    if "speed" in trial_row.index and not pd.isna(trial_row["speed"]):
-        return trial_row["speed"]
-    return "speed_unknown"
-
-
-# =====================
-# Main
-# =====================
-
-
 def main():
-    print("===== Compute speed-specific tuning summary =====")
+    print("===== Compute tuning summary =====")
 
     labeled_path = ANALYSIS_OUTPUT_DIR / "labeled_spikes.csv"
     trial_path = ANALYSIS_OUTPUT_DIR / "trial_table.csv"
@@ -186,6 +185,7 @@ def main():
 
     for unit_id in unit_ids:
         for _, tr in trials.iterrows():
+
             trial_id = tr["trial_id"]
 
             baseline_count = count_spikes_in_window(
@@ -203,6 +203,7 @@ def main():
                 labeled, unit_id, trial_id, MOVING_WINDOW[0], MOVING_WINDOW[1]
             )
 
+            # Static window is directly from trial_table, relative to moving onset.
             static_window = (
                 tr["static_start_sec"] - tr["moving_start_sec"],
                 tr["static_end_sec"] - tr["moving_start_sec"],
@@ -217,20 +218,14 @@ def main():
             moving_fr = firing_rate(moving_count, MOVING_WINDOW)
             static_fr = firing_rate(static_count, static_window)
 
-            speed_value = get_speed_value(tr)
-
             rows.append(
                 {
                     "unit_id": unit_id,
                     "trial_id": trial_id,
-                    "direction": tr.get("direction", np.nan),
-                    "orientation": tr.get("orientation", np.nan),
-                    "pattern": tr.get("pattern", np.nan),
-                    "speed": speed_value,
-                    "speed_label": tr.get("speed_label", speed_value),
-                    "speed_deg_per_sec": tr.get("speed_deg_per_sec", np.nan),
-                    "tf_hz": tr.get("tf_hz", np.nan),
-                    "sf_cpd": tr.get("sf_cpd", np.nan),
+                    "direction": tr["direction"],
+                    "orientation": tr["orientation"],
+                    "pattern": tr["pattern"],
+                    "speed": tr["speed"],
 
                     "baseline_count": baseline_count,
                     "static_count": static_count,
@@ -252,84 +247,145 @@ def main():
     unit_trial_summary = pd.DataFrame(rows)
 
     # -----------------------------
-    # Unit × speed × direction summary
+    # Unit × condition summary
     # -----------------------------
 
-    group_cols = ["unit_id", "speed", "direction", "orientation", "pattern"]
+    group_cols = ["unit_id", "direction", "orientation", "pattern", "speed"]
 
     unit_condition_summary = (
         unit_trial_summary
         .groupby(group_cols, dropna=False)
         .agg(
             n_trials=("trial_id", "nunique"),
+
             baseline_fr=("baseline_fr", "mean"),
             static_fr=("static_fr", "mean"),
             early_fr=("early_fr", "mean"),
             sustained_fr=("sustained_fr", "mean"),
             moving_fr=("moving_fr", "mean"),
+
             moving_minus_baseline=("moving_minus_baseline", "mean"),
             moving_minus_static=("moving_minus_static", "mean"),
-            speed_label=("speed_label", "first"),
-            speed_deg_per_sec=("speed_deg_per_sec", "first"),
-            tf_hz=("tf_hz", "first"),
-            sf_cpd=("sf_cpd", "first"),
         )
         .reset_index()
     )
 
-    unit_condition_summary["motion_baseline_positive"] = (
-        unit_condition_summary["moving_minus_baseline"].clip(lower=0)
-    )
-    unit_condition_summary["motion_baseline_negative_strength"] = (
-        -unit_condition_summary["moving_minus_baseline"].clip(upper=0)
+    # -----------------------------
+    # Unit × direction summary
+    # pooled across speed
+    # -----------------------------
+
+    unit_direction_summary = (
+        unit_trial_summary
+        .groupby(["unit_id", "direction"], dropna=False)
+        .agg(
+            n_trials=("trial_id", "nunique"),
+
+            baseline_fr=("baseline_fr", "mean"),
+            static_fr=("static_fr", "mean"),
+            early_fr=("early_fr", "mean"),
+            sustained_fr=("sustained_fr", "mean"),
+            moving_fr=("moving_fr", "mean"),
+
+            moving_minus_baseline=("moving_minus_baseline", "mean"),
+            moving_minus_static=("moving_minus_static", "mean"),
+        )
+        .reset_index()
     )
 
+    # These two columns are for SB11 positive/negative polar plot.
+    unit_direction_summary["motion_baseline_positive"] = (
+        unit_direction_summary["moving_minus_baseline"].clip(lower=0)
+    )
+
+    unit_direction_summary["motion_baseline_negative_strength"] = (
+        -unit_direction_summary["moving_minus_baseline"].clip(upper=0)
+    )
+
+    
     # -----------------------------
-    # Unit × speed tuning summary
+    # Unit tuning summary
     # -----------------------------
 
     tuning_rows = []
 
-    for (unit_id, speed), df_speed_unit in unit_condition_summary.groupby(["unit_id", "speed"], dropna=False):
-        df_speed_unit = df_speed_unit.sort_values("direction").copy()
+    for unit_id, df_unit in unit_direction_summary.groupby("unit_id"):
 
-        response_class, n_pos, n_neg = classify_signed_response(df_speed_unit)
+        df_unit = df_unit.sort_values("direction").copy()
 
-        moving_resp = df_speed_unit[["direction", "moving_fr"]].rename(
+        response_class, n_pos, n_neg = classify_signed_response(df_unit)
+
+        # Signed motion-baseline response
+        signed_resp = df_unit[["direction", "moving_minus_baseline"]].rename(
+            columns={"moving_minus_baseline": "response"}
+        ).copy()
+
+        # Pure moving FR response
+        moving_resp = df_unit[["direction", "moving_fr"]].rename(
             columns={"moving_fr": "response"}
         ).copy()
-        excitatory_resp = df_speed_unit[["direction", "motion_baseline_positive"]].rename(
+
+        # Excitatory component: max(moving-baseline, 0)
+        excitatory_resp = df_unit[["direction", "motion_baseline_positive"]].rename(
             columns={"motion_baseline_positive": "response"}
         ).copy()
-        suppressive_resp = df_speed_unit[["direction", "motion_baseline_negative_strength"]].rename(
+
+        # Suppressive component: max(-(moving-baseline), 0)
+        suppressive_resp = df_unit[
+            ["direction", "motion_baseline_negative_strength"]
+        ].rename(
             columns={"motion_baseline_negative_strength": "response"}
         ).copy()
+
+        # -------------------------
+        # Decide primary PD / DSI
+        # -------------------------
 
         if response_class == "all_excited_or_nonnegative":
             pd_method = "motion_minus_baseline_positive"
             primary_resp = excitatory_resp
-            preferred_direction, preferred_response_used, opposite_direction, opposite_response_used, dsi = compute_dsi_details(primary_resp)
+
+            preferred_direction, preferred_response_used, opposite_direction, opposite_response_used, dsi = (
+                compute_dsi_details(primary_resp)
+            )
+
+            # Signed response at PD is same sign as used response here.
             preferred_response_signed = preferred_response_used
+
             vector_sum_direction, vector_strength = compute_vector_strength(primary_resp)
 
         elif response_class == "all_suppressed_or_nonpositive":
             pd_method = "suppression_strength"
             primary_resp = suppressive_resp
-            preferred_direction, preferred_response_used, opposite_direction, opposite_response_used, dsi = compute_dsi_details(primary_resp)
+
+            preferred_direction, preferred_response_used, opposite_direction, opposite_response_used, dsi = (
+                compute_dsi_details(primary_resp)
+            )
+
+            # For suppressed units, the actual signed response at PD is negative.
             if not np.isnan(preferred_direction):
-                signed_match = df_speed_unit.loc[
-                    df_speed_unit["direction"].astype(float) % 360 == float(preferred_direction) % 360,
+                signed_match = df_unit.loc[
+                    df_unit["direction"].astype(float) % 360 == float(preferred_direction) % 360,
                     "moving_minus_baseline",
                 ]
-                preferred_response_signed = float(signed_match.iloc[0]) if len(signed_match) > 0 else np.nan
+                preferred_response_signed = (
+                    float(signed_match.iloc[0]) if len(signed_match) > 0 else np.nan
+                )
             else:
                 preferred_response_signed = np.nan
+
             vector_sum_direction, vector_strength = compute_vector_strength(primary_resp)
 
         elif response_class == "mixed_excited_and_suppressed":
+            # For mixed units, primary PD/DSI comes from pure moving FR.
+            # Positive and negative signed components are kept separately.
             pd_method = "pure_moving_fr_for_mixed"
             primary_resp = moving_resp
-            preferred_direction, preferred_response_used, opposite_direction, opposite_response_used, dsi = compute_dsi_details(primary_resp)
+
+            preferred_direction, preferred_response_used, opposite_direction, opposite_response_used, dsi = (
+                compute_dsi_details(primary_resp)
+            )
+
             preferred_response_signed = np.nan
             vector_sum_direction, vector_strength = compute_vector_strength(primary_resp)
 
@@ -344,29 +400,34 @@ def main():
             vector_sum_direction = np.nan
             vector_strength = np.nan
 
-        moving_pd, moving_pref_response, moving_opp_dir, moving_opp_response, moving_dsi = compute_dsi_details(moving_resp)
+        # -------------------------
+        # Always compute auxiliary metrics
+        # -------------------------
+
+        moving_pd, moving_pref_response, moving_opp_dir, moving_opp_response, moving_dsi = (
+            compute_dsi_details(moving_resp)
+        )
         moving_vector_direction, moving_vector_strength = compute_vector_strength(moving_resp)
 
-        excitation_pd, excitation_pref_response, excitation_opp_dir, excitation_opp_response, excitation_dsi = compute_dsi_details(excitatory_resp)
+        excitation_pd, excitation_pref_response, excitation_opp_dir, excitation_opp_response, excitation_dsi = (
+            compute_dsi_details(excitatory_resp)
+        )
         excitation_vector_direction, excitation_vector_strength = compute_vector_strength(excitatory_resp)
 
-        suppression_pd, suppression_pref_response, suppression_opp_dir, suppression_opp_response, suppression_dsi = compute_dsi_details(suppressive_resp)
+        suppression_pd, suppression_pref_response, suppression_opp_dir, suppression_opp_response, suppression_dsi = (
+            compute_dsi_details(suppressive_resp)
+        )
         suppression_vector_direction, suppression_vector_strength = compute_vector_strength(suppressive_resp)
 
         tuning_rows.append(
             {
                 "unit_id": unit_id,
-                "speed": speed,
-                "speed_label": df_speed_unit["speed_label"].dropna().iloc[0] if df_speed_unit["speed_label"].notna().any() else speed,
-                "speed_deg_per_sec": df_speed_unit["speed_deg_per_sec"].dropna().iloc[0] if df_speed_unit["speed_deg_per_sec"].notna().any() else np.nan,
-                "tf_hz": df_speed_unit["tf_hz"].dropna().iloc[0] if df_speed_unit["tf_hz"].notna().any() else np.nan,
-                "sf_cpd": df_speed_unit["sf_cpd"].dropna().iloc[0] if df_speed_unit["sf_cpd"].notna().any() else np.nan,
 
-                "mean_baseline_fr": df_speed_unit["baseline_fr"].mean(),
-                "mean_static_fr": df_speed_unit["static_fr"].mean(),
-                "mean_moving_fr": df_speed_unit["moving_fr"].mean(),
-                "mean_moving_minus_baseline": df_speed_unit["moving_minus_baseline"].mean(),
-                "mean_moving_minus_static": df_speed_unit["moving_minus_static"].mean(),
+                "mean_baseline_fr": df_unit["baseline_fr"].mean(),
+                "mean_static_fr": df_unit["static_fr"].mean(),
+                "mean_moving_fr": df_unit["moving_fr"].mean(),
+                "mean_moving_minus_baseline": df_unit["moving_minus_baseline"].mean(),
+                "mean_moving_minus_static": df_unit["moving_minus_static"].mean(),
 
                 "response_class": response_class,
                 "n_positive_directions": n_pos,
@@ -383,6 +444,7 @@ def main():
                 "vector_sum_direction": vector_sum_direction,
                 "vector_strength": vector_strength,
 
+                # Pure moving FR tuning
                 "moving_fr_preferred_direction": moving_pd,
                 "moving_fr_preferred_response": moving_pref_response,
                 "moving_fr_opposite_direction": moving_opp_dir,
@@ -391,6 +453,7 @@ def main():
                 "moving_fr_vector_direction": moving_vector_direction,
                 "moving_fr_vector_strength": moving_vector_strength,
 
+                # Excitatory signed component
                 "excitation_preferred_direction": excitation_pd,
                 "excitation_preferred_response": excitation_pref_response,
                 "excitation_opposite_direction": excitation_opp_dir,
@@ -399,6 +462,7 @@ def main():
                 "excitation_vector_direction": excitation_vector_direction,
                 "excitation_vector_strength": excitation_vector_strength,
 
+                # Suppressive signed component
                 "suppression_preferred_direction": suppression_pd,
                 "suppression_preferred_response": suppression_pref_response,
                 "suppression_opposite_direction": suppression_opp_dir,
@@ -411,9 +475,6 @@ def main():
 
     unit_tuning_summary = pd.DataFrame(tuning_rows)
 
-    # Add simple unit metadata if available. Because unit_tuning_summary is unit × speed,
-    # metadata is repeated once per speed.
-    unit_tuning_summary = unit_tuning_summary.merge(units, on="unit_id", how="left")
 
     # -----------------------------
     # Save
@@ -421,24 +482,24 @@ def main():
 
     trial_summary_path = ANALYSIS_OUTPUT_DIR / "unit_trial_summary.csv"
     condition_summary_path = ANALYSIS_OUTPUT_DIR / "unit_condition_summary.csv"
+    direction_summary_path = ANALYSIS_OUTPUT_DIR / "unit_direction_summary.csv"
     tuning_summary_path = ANALYSIS_OUTPUT_DIR / "unit_tuning_summary.csv"
-    speed_tuning_summary_path = ANALYSIS_OUTPUT_DIR / "unit_speed_tuning_summary.csv"
 
     unit_trial_summary.to_csv(trial_summary_path, index=False)
     unit_condition_summary.to_csv(condition_summary_path, index=False)
+    unit_direction_summary.to_csv(direction_summary_path, index=False)
     unit_tuning_summary.to_csv(tuning_summary_path, index=False)
-    unit_tuning_summary.to_csv(speed_tuning_summary_path, index=False)
 
     print("\n===== Saved =====")
     print(trial_summary_path)
     print(condition_summary_path)
+    print(direction_summary_path)
     print(tuning_summary_path)
-    print(speed_tuning_summary_path)
 
     print("\nFirst few condition summary rows:")
     print(unit_condition_summary.head())
 
-    print("\nFirst few speed-specific tuning rows:")
+    print("\nFirst few tuning summary rows:")
     print(unit_tuning_summary.head())
 
 

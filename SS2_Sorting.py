@@ -1,7 +1,7 @@
 import spikeinterface.full as si
 from spikeinterface.core import BinaryFolderRecording
 
-from config_local import WORKING_DIR
+from config_local import WORKING_DIR, SEGMENT_INDEX_TO_USE
 preprocessed_folder = WORKING_DIR / "preprocessed_M12"
 recording_saved = BinaryFolderRecording(preprocessed_folder)
 
@@ -27,7 +27,7 @@ from spikeinterface.sorters import Kilosort4Sorter
 
 from spikeinterface.core import select_segment_recording
 
-recording_seg = recording_saved.select_segments([2])
+recording_seg = recording_saved.select_segments([SEGMENT_INDEX_TO_USE])
 
 recording_test = recording_seg.frame_slice(
     start_frame=0,
@@ -49,10 +49,7 @@ params.update({
     "nblocks": 0,
     "do_correction": False,
     "duplicate_spike_ms": 0.1,
-    "n_templates": 6,
-    "Th_single_ch": 6,
-    "Th_universal": 9,
-
+    
 })
 
 sorting_test = si.run_sorter(

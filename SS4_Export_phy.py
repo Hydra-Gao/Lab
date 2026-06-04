@@ -1,6 +1,6 @@
 import spikeinterface.full as si
 from multiprocessing import freeze_support
-from config_local import OUTPUT_DIR, WORKING_DIR
+from config_local import OUTPUT_DIR, WORKING_DIR, SEGMENT_INDEX_TO_USE
 import pandas as pd
 
 
@@ -147,7 +147,7 @@ def main():
     recording_saved = si.load(PREPROCESSED_FOLDER)
 
     # Your sorter outputs are 1 segment, so use the first segment only.
-    recording_test = recording_saved.select_segments([2])
+    recording_test = recording_saved.select_segments([SEGMENT_INDEX_TO_USE])
 
     for sorter_name in CURATED_SORTING_FOLDERS:
         export_one_sorter_to_phy(sorter_name, recording_test)

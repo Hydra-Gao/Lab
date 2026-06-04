@@ -119,6 +119,7 @@ preprocessed_folder = WORKING_DIR / "preprocessed_M12"
 recording_saved = recording_ordered.save(
     folder=preprocessed_folder,
     format="binary",
-    overwrite=True
+    overwrite=True,
+    chunk_duration="10s",
 )
 
