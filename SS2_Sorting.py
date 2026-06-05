@@ -43,12 +43,12 @@ import spikeinterface.sorters as ss
 params = ss.get_default_sorter_params("kilosort4")
 
 params.update({
-    "highpass_cutoff": 10,
-    "do_CAR": True,
-    "whitening_range": 8,
-    "nblocks": 0,
-    "do_correction": False,
-    "duplicate_spike_ms": 0.1,
+    # "highpass_cutoff": 10,
+    # "do_CAR": True,
+    # "whitening_range": 8,
+    # "nblocks": 0,
+    # "do_correction": False,
+    # "duplicate_spike_ms": 0.1,
     
 })
 

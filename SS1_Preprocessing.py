@@ -6,7 +6,7 @@ from config_local import RAW_DATA
 print("Loading...")
 
 bird = "TG915"
-date = "2026-05-27_19-14-21"
+date = "2026-05-27_16-32-17"
 
 folder = RAW_DATA / bird / date
 
@@ -116,7 +116,7 @@ from config_local import WORKING_DIR
 
 preprocessed_folder = WORKING_DIR / "preprocessed_M12"
 
-recording_saved = recording_ordered.save(
+recording_saved = recording_f.save(
     folder=preprocessed_folder,
     format="binary",
     overwrite=True,
