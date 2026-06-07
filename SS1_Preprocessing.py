@@ -106,20 +106,20 @@ recording_f = si.bandpass_filter(
     ignore_low_freq_error=True
 )
 
-# recording_cmr = si.common_reference(
-#     recording_f,
-#     reference="global",
-#     operator="median"
-# )
+recording_cmr = si.common_reference(
+    recording_f,
+    reference="global",
+    operator="median",
+)
 
 from config_local import WORKING_DIR
 
 preprocessed_folder = WORKING_DIR / "preprocessed_M12"
 
-recording_saved = recording_f.save(
+recording_saved = recording_cmr.save(
     folder=preprocessed_folder,
     format="binary",
     overwrite=True,
-    chunk_duration="10s",
+    chunk_duration="20s",
 )
 
