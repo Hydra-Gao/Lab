@@ -62,10 +62,6 @@ SCREEN_ORDER = ["front", "left", "right"]
 TIME_RANGE = (-3.0, 5.0)
 BIN_WIDTH = 0.1
 
-# Whether Page 1 cross-screen summary averages across speeds.
-# Detailed pages are always screen × speed specific.
-CROSS_SCREEN_SUMMARY_POOL_SPEEDS = True
-
 
 # =====================
 # Basic helpers
@@ -238,6 +234,29 @@ def plot_screen_direction_response_curve(ax, trial_unit_screen, screen_role):
 
     x = np.arange(len(directions))
 
+    # Plot raw trial-level points
+    rng = np.random.default_rng(42)
+
+    for i, direction in enumerate(directions):
+        y_raw = df.loc[
+            df["direction"] == direction,
+            "moving_minus_baseline"
+        ].dropna().to_numpy(dtype=float)
+
+        if len(y_raw) == 0:
+            continue
+
+        # small horizontal jitter so overlapping trials are visible
+        x_raw = i + rng.uniform(-0.08, 0.08, size=len(y_raw))
+
+        ax.scatter(
+            x_raw,
+            y_raw,
+            s=18,
+            alpha=0.45,
+            linewidths=0,
+        )
+
     ax.errorbar(
         x,
         summary["mean"].values,
@@ -262,8 +281,14 @@ def plot_screen_static_moving_polar(ax, condition_unit_screen, screen_role):
     Plots static FR and moving FR together.
     If multiple speeds exist, this cross-screen summary averages across speeds.
     """
+    baseline_col = (
+        "pooled_static_fr"
+        if "pooled_static_fr" in condition_unit_screen.columns
+        else "static_fr"
+    )
+
     df = condition_unit_screen[
-        ["direction", "static_fr", "moving_fr"]
+        ["direction", baseline_col, "moving_fr"]
     ].dropna(subset=["direction"]).copy()
 
     if df.empty:
@@ -273,7 +298,7 @@ def plot_screen_static_moving_polar(ax, condition_unit_screen, screen_role):
     df = (
         df.groupby("direction", as_index=False)
         .agg(
-            static_fr=("static_fr", "mean"),
+            pooled_static_fr=(baseline_col, "mean"),
             moving_fr=("moving_fr", "mean"),
         )
         .sort_values("direction")
@@ -283,7 +308,7 @@ def plot_screen_static_moving_polar(ax, condition_unit_screen, screen_role):
     theta_c, _ = close_polar(theta, np.zeros(len(theta)))
 
     for col, label in [
-        ("static_fr", "static FR"),
+        ("pooled_static_fr", "pooled static FR"),
         ("moving_fr", "moving FR"),
     ]:
         r = df[col].clip(lower=0).values
@@ -353,21 +378,110 @@ def add_screen_stats_text(ax, unit_id, screen_role, tuning_unit_screen, sig_unit
     )
 
 
+def add_screen_stats_text_one_speed(
+    ax,
+    unit_id,
+    screen_role,
+    speed,
+    tuning_screen_speed,
+    sig_screen_speed,
+):
+    """
+    Statistics block for one unit × screen_role × speed.
+    Used in speed-specific cross-screen summary pages.
+    """
+    ax.axis("off")
+
+    lines = [
+        f"Unit {unit_id}",
+        f"Screen: {screen_role}",
+        f"Speed: {speed}",
+    ]
+
+    if tuning_screen_speed is None or tuning_screen_speed.empty:
+        lines += ["", "No tuning data"]
+        ax.text(
+            0.02,
+            0.98,
+            "\n".join(lines),
+            va="top",
+            ha="left",
+            fontsize=8,
+        )
+        return
+
+    row = tuning_screen_speed.iloc[0]
+
+    lines += [
+        "",
+        f"Class: {row.get('response_class', 'NA')}",
+        f"PD method: {row.get('pd_method', 'NA')}",
+        f"Positive dirs: {format_value(row.get('n_positive_directions', np.nan), 0)}",
+        f"Negative dirs: {format_value(row.get('n_negative_directions', np.nan), 0)}",
+        "",
+        f"Mean static FR: {format_value(row.get('mean_static_fr', np.nan), 2)}",
+        f"Mean moving FR: {format_value(row.get('mean_moving_fr', np.nan), 2)}",
+        f"Mean moving-baseline: {format_value(row.get('mean_moving_minus_baseline', np.nan), 2)}",
+        "",
+        f"Primary PD: {format_value(row.get('preferred_direction', np.nan), 2)}",
+        f"Primary DSI: {format_value(row.get('dsi', np.nan), 3)}",
+        f"Vector strength: {format_value(row.get('vector_strength', np.nan), 3)}",
+        "",
+        f"Moving FR PD: {format_value(row.get('moving_fr_preferred_direction', np.nan), 2)}",
+        f"Moving FR DSI: {format_value(row.get('moving_fr_dsi', np.nan), 3)}",
+        f"Excitation PD: {format_value(row.get('excitation_preferred_direction', np.nan), 2)}",
+        f"Excitation DSI: {format_value(row.get('excitation_dsi', np.nan), 3)}",
+        f"Suppression PD: {format_value(row.get('suppression_preferred_direction', np.nan), 2)}",
+        f"Suppression DSI: {format_value(row.get('suppression_dsi', np.nan), 3)}",
+    ]
+
+    if sig_screen_speed is not None and not sig_screen_speed.empty:
+        sig_row = sig_screen_speed.iloc[0]
+
+        lines += [
+            "",
+            f"p motion: {format_value(sig_row.get('p_motion_baseline_two_sided', np.nan), 4)}",
+            f"q motion: {format_value(sig_row.get('q_motion_baseline', np.nan), 4)}",
+            f"p direction: {format_value(sig_row.get('p_direction_tuning_motion_baseline', np.nan), 4)}",
+            f"q direction: {format_value(sig_row.get('q_direction_tuning_motion_baseline', np.nan), 4)}",
+            "",
+            f"Motion responsive: {sig_row.get('is_motion_baseline_responsive', 'NA')}",
+            f"Motion suppressed: {sig_row.get('is_motion_baseline_suppressed', 'NA')}",
+            f"Direction tuned: {sig_row.get('is_direction_tuned_motion_baseline', 'NA')}",
+        ]
+
+    ax.text(
+        0.02,
+        0.98,
+        "\n".join(lines),
+        va="top",
+        ha="left",
+        fontsize=7.5,
+    )
+
+
 def plot_cross_screen_summary_page(
     pdf,
     unit_id,
+    speed,
     trial_unit,
     condition_unit,
     tuning_unit,
     sig_unit,
 ):
-    screens = get_screen_order_available(trial_unit, condition_unit, tuning_unit, sig_unit)
+    """
+    Cross-screen comparison summary for one speed.
 
-    if len(screens) == 0:
-        return
+    Page layout:
+        Row 1: direction response curve, one panel per screen
+        Row 2: static vs moving polar plot, one panel per screen
+        Row 3: screen-specific statistics, one panel per screen
 
-    # Always allocate 3 columns for front / left / right layout.
-    # If a screen is missing, that panel will say No data.
+    Important:
+        This page is speed-specific.
+        It does NOT pool across speeds.
+    """
+
     plot_screens = SCREEN_ORDER
 
     fig = plt.figure(figsize=(18, 14))
@@ -380,56 +494,61 @@ def plot_cross_screen_summary_page(
     )
 
     for col, screen_role in enumerate(plot_screens):
-        trial_screen = (
-            trial_unit[trial_unit["screen_role"] == screen_role].copy()
-            if "screen_role" in trial_unit.columns
-            else pd.DataFrame()
-        )
 
-        condition_screen = (
-            condition_unit[condition_unit["screen_role"] == screen_role].copy()
-            if "screen_role" in condition_unit.columns
-            else pd.DataFrame()
-        )
+        trial_screen_speed = trial_unit[
+            (trial_unit["screen_role"] == screen_role)
+            & (trial_unit["speed"] == speed)
+        ].copy()
 
-        tuning_screen = (
-            tuning_unit[tuning_unit["screen_role"] == screen_role].copy()
-            if "screen_role" in tuning_unit.columns
-            else pd.DataFrame()
-        )
+        condition_screen_speed = condition_unit[
+            (condition_unit["screen_role"] == screen_role)
+            & (condition_unit["speed"] == speed)
+        ].copy()
 
-        sig_screen = (
-            sig_unit[sig_unit["screen_role"] == screen_role].copy()
-            if sig_unit is not None and not sig_unit.empty and "screen_role" in sig_unit.columns
-            else pd.DataFrame()
-        )
+        tuning_screen_speed = tuning_unit[
+            (tuning_unit["screen_role"] == screen_role)
+            & (tuning_unit["speed"] == speed)
+        ].copy()
 
+        if sig_unit is not None and not sig_unit.empty:
+            sig_screen_speed = sig_unit[
+                (sig_unit["screen_role"] == screen_role)
+                & (sig_unit["speed"] == speed)
+            ].copy()
+        else:
+            sig_screen_speed = pd.DataFrame()
+
+        # Row 1: direction response curve
         ax_curve = fig.add_subplot(gs[0, col])
         plot_screen_direction_response_curve(
             ax_curve,
-            trial_screen,
+            trial_screen_speed,
             screen_role,
         )
+        ax_curve.set_title(f"{screen_role}: direction response\nspeed = {speed}")
 
+        # Row 2: static + moving polar
         ax_polar = fig.add_subplot(gs[1, col], projection="polar")
         plot_screen_static_moving_polar(
             ax_polar,
-            condition_screen,
+            condition_screen_speed,
             screen_role,
         )
+        ax_polar.set_title(f"{screen_role}: static vs moving\nspeed = {speed}")
 
+        # Row 3: stats text
         ax_text = fig.add_subplot(gs[2, col])
-        add_screen_stats_text(
+        add_screen_stats_text_one_speed(
             ax_text,
             unit_id,
             screen_role,
-            tuning_screen,
-            sig_screen,
+            speed,
+            tuning_screen_speed,
+            sig_screen_speed,
         )
 
     fig.suptitle(
-        f"Unit {unit_id} cross-screen comparison summary\n"
-        f"Page 1 summary pools speeds for direction/polar panels; later pages are screen × speed specific.",
+        f"Unit {unit_id} cross-screen comparison summary | speed = {speed}",
         fontsize=14,
     )
 
@@ -752,17 +871,23 @@ def plot_one_unit(
 
     with PdfPages(out_path) as pdf:
 
-        # Page 1: cross-screen summary.
-        plot_cross_screen_summary_page(
-            pdf=pdf,
-            unit_id=unit_id,
-            trial_unit=trial_unit,
-            condition_unit=condition_unit,
-            tuning_unit=tuning_unit,
-            sig_unit=sig_unit,
-        )
+        # Pages 1-2:
+        # Cross-screen comparison summary, one page per speed.
+        all_speeds = sorted_unique_nonnull(condition_unit["speed"])
 
-        # Pages 2+: screen × speed.
+        for speed in all_speeds:
+            plot_cross_screen_summary_page(
+                pdf=pdf,
+                unit_id=unit_id,
+                speed=speed,
+                trial_unit=trial_unit,
+                condition_unit=condition_unit,
+                tuning_unit=tuning_unit,
+                sig_unit=sig_unit,
+            )
+
+        # Pages 3+:
+        # Detailed screen × speed pages.
         for screen_role in SCREEN_ORDER:
             condition_screen = condition_unit[
                 condition_unit["screen_role"] == screen_role

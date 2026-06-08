@@ -46,7 +46,7 @@ params.update({
     "save_preprocessed_copy": True,
     "highpass_cutoff": 10,
     "do_CAR": False,
-    "whitening_range": 1,
+    "whitening_range": 5,
     "do_correction": False,
     # "duplicate_spike_ms": 0.1,
     # "skip_kilosort_preprocessing": True

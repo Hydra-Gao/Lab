@@ -301,6 +301,32 @@ def build_full_segment_map(
 # TTL conversion
 # =====================
 
+
+def deduplicate_ttl_events(ttl: pd.DataFrame, refractory_sec: float = 0.01) -> pd.DataFrame:
+    """
+    Collapse duplicate TTL events that belong to the same pulse.
+
+    Neuralynx may record one serial/TTL write as multiple positive events
+    separated by sub-millisecond intervals. Keep only the first event in each
+    refractory window.
+    """
+    ttl = ttl.sort_values("timestamp_us").reset_index(drop=True).copy()
+
+    dt_sec = ttl["timestamp_us"].diff() / 1_000_000.0
+
+    keep = dt_sec.isna() | (dt_sec > refractory_sec)
+
+    ttl_dedup = ttl.loc[keep].copy().reset_index(drop=True)
+
+    print("\nTTL deduplication:")
+    print(f"Before dedup: {len(ttl)}")
+    print(f"After dedup:  {len(ttl_dedup)}")
+    print(f"Removed:      {len(ttl) - len(ttl_dedup)}")
+    print(f"Refractory:   {refractory_sec * 1000:.1f} ms")
+
+    return ttl_dedup
+
+
 def assign_events_to_concat_time(
     events: pd.DataFrame,
     full_segment_map: pd.DataFrame,
@@ -309,6 +335,7 @@ def assign_events_to_concat_time(
     Assign each TTL event to one selected original segment and convert to concat time.
     """
     ttl = events.loc[events["ttl_value"] > 0].copy()
+    ttl = deduplicate_ttl_events(ttl, refractory_sec=0.01)      
 
     assigned_parts = []
 

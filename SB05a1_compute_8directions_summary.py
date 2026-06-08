@@ -29,6 +29,10 @@ from SB0_config_analysis import (
     MOVING_WINDOW,
 )
 
+BASELINE_POOLING_MODE = "screen_global_static"
+# BASELINE_POOLING_MODE = "screen_axis_static"
+# BASELINE_POOLING_MODE = "trail_window_specific"
+
 
 # Small tolerance to avoid classifying tiny numerical/noise-level deviations as
 # true excitation or suppression. Adjust if needed.
@@ -340,6 +344,57 @@ def main():
         unit_trial_summary["speed_label"].astype(str).str.strip()
     )
 
+    # Preserve original trial-level values
+    unit_trial_summary["baseline_fr_original"] = unit_trial_summary["baseline_fr"]
+    unit_trial_summary["static_fr_original"] = unit_trial_summary["static_fr"]
+    unit_trial_summary["moving_minus_baseline_original"] = unit_trial_summary["moving_minus_baseline"]
+
+    if BASELINE_POOLING_MODE == "screen_axis_static":
+        unit_trial_summary["direction_float"] = (
+            pd.to_numeric(unit_trial_summary["direction"], errors="coerce") % 360
+        )
+
+        # Opposite directions share the same static orientation/axis.
+        # Examples: 45 and 225 -> 45; 90 and 270 -> 90.
+        unit_trial_summary["direction_axis"] = (
+            unit_trial_summary["direction_float"] % 180
+        )
+
+        pool_cols = ["unit_id", "screen_role", "direction_axis"]
+
+        pooled = (
+            unit_trial_summary
+            .groupby(pool_cols, dropna=False)["static_fr"]
+            .transform("mean")
+        )
+
+        unit_trial_summary["pooled_baseline_fr"] = pooled
+        unit_trial_summary["baseline_pooling_mode"] = BASELINE_POOLING_MODE
+
+        # Replace the response metric used downstream
+        unit_trial_summary["baseline_fr"] = unit_trial_summary["pooled_baseline_fr"]
+        unit_trial_summary["moving_minus_baseline"] = (
+            unit_trial_summary["moving_fr"] - unit_trial_summary["pooled_baseline_fr"]
+        )
+
+    if BASELINE_POOLING_MODE == "screen_global_static":
+        pool_cols = ["unit_id", "screen_role"]
+
+        pooled = (
+            unit_trial_summary
+            .groupby(pool_cols, dropna=False)["static_fr"]
+            .transform("mean")
+        )
+
+        unit_trial_summary["pooled_baseline_fr"] = pooled
+        unit_trial_summary["baseline_pooling_mode"] = BASELINE_POOLING_MODE
+
+        # Replace the response metric used downstream
+        unit_trial_summary["baseline_fr"] = unit_trial_summary["pooled_baseline_fr"]
+        unit_trial_summary["moving_minus_baseline"] = (
+            unit_trial_summary["moving_fr"] - unit_trial_summary["pooled_baseline_fr"]
+        )
+
     # -----------------------------
     # Unit × screen_role × speed × direction summary
     # -----------------------------
@@ -364,6 +419,10 @@ def main():
             early_fr=("early_fr", "mean"),
             sustained_fr=("sustained_fr", "mean"),
             moving_fr=("moving_fr", "mean"),
+
+            # New: pooled static baseline used for analysis/plotting
+            pooled_static_fr=("pooled_baseline_fr", "mean"),
+            baseline_pooling_mode=("baseline_pooling_mode", "first"),
 
             moving_minus_baseline=("moving_minus_baseline", "mean"),
             moving_minus_static=("moving_minus_static", "mean"),

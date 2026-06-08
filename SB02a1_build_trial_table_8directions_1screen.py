@@ -8,47 +8,13 @@ from SB0_config_analysis import (
     STIMLOG_RUNS,
     MOTION_STATE,
     EXPECTED_MOTION_TTL_COUNT,
-
 )
 
 
-# =====================
-# Screen role mapping
-# =====================
-# Based on your three-screen mapping:
-#   ACTIVE_MONITOR_CONFIGS = [1, 0, 3]
-#   left  = MONITOR_CONFIGS[1] = screen1
-#   front = MONITOR_CONFIGS[0] = screen0
-#   right = MONITOR_CONFIGS[3] = screen3
-#
-# So for single-screen runs:
-#   Active_monitor_config_index 1 -> left
-#   Active_monitor_config_index 0 -> front
-#   Active_monitor_config_index 3 -> right
+TTL_GLOBAL_PATH = ANALYSIS_OUTPUT_DIR / "ttl_events_global.csv"
 
-SCREEN_ROLE_BY_CONFIG_INDEX = {
-    1: "left",
-    0: "front",
-    3: "right",
-}
-
-SCREEN_ROLE_BY_MONITOR_LABEL = {
-    "screen1": "left",
-    "screen0": "front",
-    "screen3": "right",
-}
-
-SCREEN_ROLE_BY_SCREEN_NUMBER = {
-    1: "left",
-    0: "front",
-    3: "right",
-}
-
-# If auto-detection fails, set this manually:
-# MANUAL_SCREEN_ROLE = "front"
-# MANUAL_SCREEN_ROLE = "left"
-# MANUAL_SCREEN_ROLE = "right"
-MANUAL_SCREEN_ROLE = None
+ALIGNMENT_RMS_WARNING_MS = 2.0
+ALIGNMENT_MAX_ABS_WARNING_MS = 5.0
 
 
 def normalize_state(x):
@@ -57,176 +23,149 @@ def normalize_state(x):
     return str(x).strip().lower()
 
 
-def get_screen_role(row):
+def get_run_value(run_cfg, key, default=None):
+    if key in run_cfg:
+        return run_cfg[key]
+    return default
+
+
+def get_ttl_time_col(ttl_df):
+    if "concat_time_sec" in ttl_df.columns:
+        return "concat_time_sec"
+    if "event_time_sec" in ttl_df.columns:
+        return "event_time_sec"
+    raise ValueError("TTL file must contain either concat_time_sec or event_time_sec.")
+
+
+def choose_ttl_block_for_run(motion_rows, ttl_segment, manual_start_index=None):
     """
-    Infer screen_role for one stimlog row.
+    Match one stimlog's motion rows to a consecutive TTL block within one segment.
 
-    Priority:
-        1. MANUAL_SCREEN_ROLE
-        2. Active_monitor_config_index
-        3. Active_monitor_label
-        4. Active_screen_number
+    If manual_start_index is None:
+        try all possible blocks inside this segment and choose lowest RMS residual.
+    If manual_start_index is given:
+        use that local start index within ttl_segment.
     """
-    if MANUAL_SCREEN_ROLE is not None:
-        return MANUAL_SCREEN_ROLE
+    n_motion = len(motion_rows)
+    n_ttl = len(ttl_segment)
 
-    if "Active_monitor_config_index" in row.index and not pd.isna(row["Active_monitor_config_index"]):
-        try:
-            idx = int(row["Active_monitor_config_index"])
-            if idx in SCREEN_ROLE_BY_CONFIG_INDEX:
-                return SCREEN_ROLE_BY_CONFIG_INDEX[idx]
-        except Exception:
-            pass
-
-    if "Active_monitor_label" in row.index and not pd.isna(row["Active_monitor_label"]):
-        label = str(row["Active_monitor_label"]).strip()
-        if label in SCREEN_ROLE_BY_MONITOR_LABEL:
-            return SCREEN_ROLE_BY_MONITOR_LABEL[label]
-
-    if "Active_screen_number" in row.index and not pd.isna(row["Active_screen_number"]):
-        try:
-            screen_number = int(row["Active_screen_number"])
-            if screen_number in SCREEN_ROLE_BY_SCREEN_NUMBER:
-                return SCREEN_ROLE_BY_SCREEN_NUMBER[screen_number]
-        except Exception:
-            pass
-
-    return "unknown"
-
-
-def main():
-
-    print("===== Building 8-direction single-screen trial table =====")
-
-    # -----------------------------
-    # Load files
-    # -----------------------------
-
-    stimlog = pd.read_csv(STIMLOG_PATH)
-
-    ttl_path = ANALYSIS_OUTPUT_DIR / "events_ttl_rising_segment.csv"
-    ttl_df = pd.read_csv(ttl_path)
-
-    print(f"Stimlog rows: {len(stimlog)}")
-    print(f"TTL rows: {len(ttl_df)}")
-
-    # -----------------------------
-    # Keep motion rows only
-    # -----------------------------
-
-    motion_rows = (
-        stimlog.loc[
-            stimlog["Stimulus_state"].map(normalize_state)
-            == normalize_state(MOTION_STATE)
-        ]
-        .copy()
-        .reset_index(drop=True)
-    )
-
-    print(f"Motion rows: {len(motion_rows)}")
-
-    if EXPECTED_MOTION_TTL_COUNT is not None:
-        print(f"Expected motion TTL count: {EXPECTED_MOTION_TTL_COUNT}")
-
-    # -----------------------------
-    # Basic sanity check
-    # -----------------------------
-
-    if len(ttl_df) < len(motion_rows):
+    if n_ttl < n_motion:
         raise ValueError(
-            "Not enough TTL events for motion rows. "
-            "Check segment selection or stimlog."
+            f"Not enough TTLs in this segment. TTL rows={n_ttl}, motion rows={n_motion}."
         )
 
-    # -----------------------------
-    # Match TTLs to motion rows
-    # -----------------------------
+    ttl_time_col = get_ttl_time_col(ttl_segment)
+    stim_starts = motion_rows["Stimulus_start"].to_numpy(dtype=float)
 
-    ttl_match = ttl_df.iloc[: len(motion_rows)].copy()
+    if manual_start_index is not None:
+        start = int(manual_start_index)
 
-    # -----------------------------
-    # Compute offset
-    # -----------------------------
+        if start < 0 or start + n_motion > n_ttl:
+            raise ValueError(
+                f"Manual ttl_block_start_index={start} is invalid. "
+                f"Segment has {n_ttl} TTLs and stimlog has {n_motion} motion rows."
+            )
 
-    first_motion_onset = motion_rows.loc[0, "Stimulus_start"]
+        ttl_match = ttl_segment.iloc[start:start + n_motion].copy()
+        ttl_times = ttl_match[ttl_time_col].to_numpy(dtype=float)
 
-    if "event_time_sec" in ttl_match.columns:
-        first_ttl_time = ttl_match.loc[0, "event_time_sec"]
-        ttl_time_col = "event_time_sec"
-    elif "concat_time_sec" in ttl_match.columns:
-        first_ttl_time = ttl_match.loc[0, "concat_time_sec"]
-        ttl_time_col = "concat_time_sec"
-    else:
-        raise ValueError(
-            "TTL file must contain either event_time_sec or concat_time_sec."
-        )
+        offset = ttl_times[0] - stim_starts[0]
+        residual_ms = (ttl_times - (stim_starts + offset)) * 1000
 
-    recording_offset = first_ttl_time - first_motion_onset
-
-    print(f"\nRecording offset: {recording_offset:.6f} sec")
-    print(f"Using TTL time column: {ttl_time_col}")
-
-    # -----------------------------
-    # Alignment QC
-    # -----------------------------
-
-    alignment_qc = pd.DataFrame(
-        {
-            "trial_id": np.arange(len(motion_rows)),
-            "stimlog_motion_start_sec": motion_rows["Stimulus_start"].values,
-            "ttl_time_sec": ttl_match[ttl_time_col].values,
+        return {
+            "mode": "manual",
+            "ttl_time_col": ttl_time_col,
+            "ttl_block_start_index": start,
+            "ttl_match": ttl_match,
+            "recording_offset_sec": offset,
+            "residual_ms": residual_ms,
+            "rms_ms": float(np.sqrt(np.mean(residual_ms ** 2))),
+            "max_abs_ms": float(np.max(np.abs(residual_ms))),
         }
-    )
 
-    if "ttl_index_global" in ttl_match.columns:
-        alignment_qc["ttl_index_global"] = ttl_match["ttl_index_global"].values
+    candidates = []
 
-    if "original_segment_index" in ttl_match.columns:
-        alignment_qc["original_segment_index"] = ttl_match["original_segment_index"].values
+    for start in range(0, n_ttl - n_motion + 1):
+        ttl_block = ttl_segment.iloc[start:start + n_motion]
+        ttl_times = ttl_block[ttl_time_col].to_numpy(dtype=float)
 
-    alignment_qc["predicted_ttl_sec"] = (
-        alignment_qc["stimlog_motion_start_sec"] + recording_offset
-    )
+        offset = ttl_times[0] - stim_starts[0]
+        residual_ms = (ttl_times - (stim_starts + offset)) * 1000
 
-    alignment_qc["residual_ms"] = (
-        alignment_qc["ttl_time_sec"]
-        - alignment_qc["predicted_ttl_sec"]
-    ) * 1000
+        candidates.append(
+            {
+                "ttl_block_start_index": start,
+                "recording_offset_sec": offset,
+                "rms_ms": float(np.sqrt(np.mean(residual_ms ** 2))),
+                "max_abs_ms": float(np.max(np.abs(residual_ms))),
+            }
+        )
 
-    print("\nAlignment residuals (ms):")
-    print(alignment_qc["residual_ms"].describe())
+    candidates_df = pd.DataFrame(candidates)
+    best = candidates_df.sort_values(["rms_ms", "max_abs_ms"]).iloc[0]
 
-    # -----------------------------
-    # Shift stimlog into neural / concat time
-    # -----------------------------
+    start = int(best["ttl_block_start_index"])
+    ttl_match = ttl_segment.iloc[start:start + n_motion].copy()
+    ttl_times = ttl_match[ttl_time_col].to_numpy(dtype=float)
+
+    offset = ttl_times[0] - stim_starts[0]
+    residual_ms = (ttl_times - (stim_starts + offset)) * 1000
+
+    return {
+        "mode": "auto",
+        "ttl_time_col": ttl_time_col,
+        "ttl_block_start_index": start,
+        "ttl_match": ttl_match,
+        "recording_offset_sec": offset,
+        "residual_ms": residual_ms,
+        "rms_ms": float(np.sqrt(np.mean(residual_ms ** 2))),
+        "max_abs_ms": float(np.max(np.abs(residual_ms))),
+        "candidate_summary": candidates_df.sort_values("rms_ms").head(10),
+    }
+
+
+def build_trial_table_for_one_run(
+    stimlog,
+    ttl_match,
+    ttl_time_col,
+    recording_offset,
+    run_cfg,
+    run_index,
+    global_trial_id_start,
+):
+    """
+    Build trial rows for one single-screen run.
+
+    Expected stimlog structure:
+        static -> moving
+    """
+    original_segment_index = int(run_cfg["original_segment_index"])
+    screen_role = str(run_cfg["screen_role"]).strip()
+    stimlog_path = Path(run_cfg["stimlog_path"])
+    stimlog_label = run_cfg.get("stimlog_label", stimlog_path.stem)
 
     updated_stimlog = stimlog.copy()
 
     updated_stimlog["Stimulus_start"] = (
-        updated_stimlog["Stimulus_start"] + recording_offset
+        pd.to_numeric(updated_stimlog["Stimulus_start"], errors="coerce")
+        + recording_offset
     )
-
     updated_stimlog["Stimulus_end"] = (
-        updated_stimlog["Stimulus_end"] + recording_offset
+        pd.to_numeric(updated_stimlog["Stimulus_end"], errors="coerce")
+        + recording_offset
     )
 
-    updated_stimlog["screen_role"] = updated_stimlog.apply(get_screen_role, axis=1)
-
-    # -----------------------------
-    # Build trial table
-    # -----------------------------
-    # Single-screen stimulus structure:
-    # Each trial:
-    # static -> moving
-    #
-    # TTL is sent at moving onset, so ttl_match[trial_id]
-    # corresponds to the moving row of each detected trial.
+    updated_stimlog["run_index"] = run_index
+    updated_stimlog["stimlog_file"] = str(stimlog_path)
+    updated_stimlog["stimlog_label"] = stimlog_label
+    updated_stimlog["screen_role"] = screen_role
+    updated_stimlog["original_segment_index"] = original_segment_index
+    updated_stimlog["recording_offset_sec"] = recording_offset
 
     trial_rows = []
-    trial_id = 0
+    local_trial_id = 0
 
     for i in range(len(updated_stimlog) - 1):
-
         row_static = updated_stimlog.iloc[i]
         row_moving = updated_stimlog.iloc[i + 1]
 
@@ -234,19 +173,31 @@ def main():
             normalize_state(row_static["Stimulus_state"]) == "static"
             and normalize_state(row_moving["Stimulus_state"]) == "moving"
         ):
+            if local_trial_id >= len(ttl_match):
+                raise ValueError(
+                    f"More detected static/moving trials than matched TTLs in run {stimlog_label}."
+                )
 
-            ttl_row = ttl_match.iloc[trial_id]
+            ttl_row = ttl_match.iloc[local_trial_id]
 
             trial_rows.append(
                 {
-                    "trial_id": trial_id,
+                    "trial_id": global_trial_id_start + local_trial_id,
+                    "local_trial_id": local_trial_id,
 
-                    # Recording / segment identity if available
-                    "original_segment_index": ttl_row.get("original_segment_index", np.nan),
+                    "run_index": run_index,
+                    "stimlog_file": str(stimlog_path),
+                    "stimlog_label": stimlog_label,
+
+                    # Segment / TTL identity
+                    "original_segment_index": original_segment_index,
                     "ttl_index_global": ttl_row.get("ttl_index_global", np.nan),
+                    "ttl_timestamp_us": ttl_row.get("timestamp_us", np.nan),
 
-                    # Screen identity
-                    "screen_role": row_moving.get("screen_role", "unknown"),
+                    # Screen identity from config
+                    "screen_role": screen_role,
+
+                    # Monitor metadata from stimlog if available
                     "active_monitor_config_index": row_moving.get("Active_monitor_config_index", np.nan),
                     "active_monitor_label": row_moving.get("Active_monitor_label", np.nan),
                     "active_screen_number": row_moving.get("Active_screen_number", np.nan),
@@ -263,56 +214,245 @@ def main():
                     "tf_hz": row_moving["GratingStim_TF_Hz"],
                     "sf_cpd": row_moving["GratingStim_SF_cpd"],
 
-                    # State timing in neural-recording / concat time
+                    # State timing in sorter concat time
                     "static_start_sec": row_static["Stimulus_start"],
                     "static_end_sec": row_static["Stimulus_end"],
-
                     "moving_start_sec": row_moving["Stimulus_start"],
                     "moving_end_sec": row_moving["Stimulus_end"],
 
-                    # Matched Neuralynx TTL time
+                    # Matched TTL in sorter concat time
                     "ttl_time_sec": ttl_row[ttl_time_col],
+                    "ttl_concat_time_sec": ttl_row.get("concat_time_sec", ttl_row[ttl_time_col]),
                 }
             )
 
-            trial_id += 1
+            local_trial_id += 1
 
-    if trial_id != len(motion_rows):
+    return updated_stimlog, pd.DataFrame(trial_rows)
+
+
+def process_one_run(run_cfg, run_index, ttl_global, global_trial_id_start):
+    required = ["original_segment_index", "screen_role", "stimlog_path"]
+    missing = [k for k in required if k not in run_cfg]
+    if missing:
+        raise ValueError(f"STIMLOG_RUNS[{run_index}] is missing keys: {missing}")
+
+    original_segment_index = int(run_cfg["original_segment_index"])
+    screen_role = str(run_cfg["screen_role"]).strip()
+    stimlog_path = Path(run_cfg["stimlog_path"])
+    stimlog_label = run_cfg.get("stimlog_label", stimlog_path.stem)
+    manual_ttl_start = run_cfg.get("ttl_block_start_index", None)
+
+    print("\n" + "=" * 80)
+    print(f"Run {run_index}: {stimlog_label}")
+    print(f"Stimlog: {stimlog_path}")
+    print(f"Original segment index: {original_segment_index}")
+    print(f"Screen role: {screen_role}")
+
+    if not stimlog_path.exists():
+        raise FileNotFoundError(f"Stimlog file not found: {stimlog_path}")
+
+    stimlog = pd.read_csv(stimlog_path)
+
+    motion_rows = (
+        stimlog.loc[
+            stimlog["Stimulus_state"].map(normalize_state)
+            == normalize_state(MOTION_STATE)
+        ]
+        .copy()
+        .reset_index(drop=True)
+    )
+
+    print(f"Stimlog rows: {len(stimlog)}")
+    print(f"Motion rows: {len(motion_rows)}")
+
+    if len(motion_rows) == 0:
+        raise ValueError(f"No motion rows found in {stimlog_path}")
+
+    ttl_segment = (
+        ttl_global.loc[
+            ttl_global["original_segment_index"].astype(int)
+            == original_segment_index
+        ]
+        .copy()
+        .sort_values(get_ttl_time_col(ttl_global))
+        .reset_index(drop=True)
+    )
+
+    print(f"TTL rows in selected segment: {len(ttl_segment)}")
+
+    if len(ttl_segment) == 0:
+        raise ValueError(
+            f"No TTL events found for original_segment_index={original_segment_index}. "
+            "Check SB01 output and STIMLOG_RUNS."
+        )
+
+    match = choose_ttl_block_for_run(
+        motion_rows=motion_rows,
+        ttl_segment=ttl_segment,
+        manual_start_index=manual_ttl_start,
+    )
+
+    ttl_match = match["ttl_match"]
+    ttl_time_col = match["ttl_time_col"]
+    recording_offset = match["recording_offset_sec"]
+
+    print("\nTTL block matching:")
+    print(f"Mode: {match['mode']}")
+    print(f"TTL local block start index: {match['ttl_block_start_index']}")
+    print(f"Using TTL time column: {ttl_time_col}")
+    print(f"Recording offset: {recording_offset:.6f} sec")
+    print(f"Residual RMS: {match['rms_ms']:.3f} ms")
+    print(f"Residual max abs: {match['max_abs_ms']:.3f} ms")
+
+    if "candidate_summary" in match:
+        print("\nTop TTL block candidates:")
+        print(match["candidate_summary"])
+
+    if match["rms_ms"] > ALIGNMENT_RMS_WARNING_MS:
         print(
-            f"Warning: detected trials ({trial_id}) != motion rows ({len(motion_rows)}). "
+            f"Warning: RMS residual {match['rms_ms']:.3f} ms > "
+            f"{ALIGNMENT_RMS_WARNING_MS} ms."
+        )
+
+    if match["max_abs_ms"] > ALIGNMENT_MAX_ABS_WARNING_MS:
+        print(
+            f"Warning: max abs residual {match['max_abs_ms']:.3f} ms > "
+            f"{ALIGNMENT_MAX_ABS_WARNING_MS} ms."
+        )
+
+    alignment_qc = pd.DataFrame(
+        {
+            "run_index": run_index,
+            "stimlog_file": str(stimlog_path),
+            "stimlog_label": stimlog_label,
+            "screen_role": screen_role,
+            "original_segment_index": original_segment_index,
+            "local_trial_id": np.arange(len(motion_rows), dtype=int),
+            "stimlog_motion_start_sec": motion_rows["Stimulus_start"].values,
+            "ttl_time_sec": ttl_match[ttl_time_col].values,
+        }
+    )
+
+    alignment_qc["recording_offset_sec"] = recording_offset
+    alignment_qc["predicted_ttl_sec"] = (
+        alignment_qc["stimlog_motion_start_sec"] + recording_offset
+    )
+    alignment_qc["residual_ms"] = match["residual_ms"]
+
+    if "ttl_index_global" in ttl_match.columns:
+        alignment_qc["ttl_index_global"] = ttl_match["ttl_index_global"].values
+
+    if "timestamp_us" in ttl_match.columns:
+        alignment_qc["ttl_timestamp_us"] = ttl_match["timestamp_us"].values
+
+    updated_stimlog, trial_table = build_trial_table_for_one_run(
+        stimlog=stimlog,
+        ttl_match=ttl_match,
+        ttl_time_col=ttl_time_col,
+        recording_offset=recording_offset,
+        run_cfg=run_cfg,
+        run_index=run_index,
+        global_trial_id_start=global_trial_id_start,
+    )
+
+    if len(trial_table) != len(motion_rows):
+        print(
+            f"Warning: detected trials ({len(trial_table)}) != motion rows ({len(motion_rows)}). "
             "Check whether stimlog contains incomplete static/moving pairs."
         )
 
-    trial_table = pd.DataFrame(trial_rows)
+    return updated_stimlog, alignment_qc, trial_table
 
-    # -----------------------------
-    # Screen role QC
-    # -----------------------------
 
-    print("\nScreen role counts in trial table:")
-    if "screen_role" in trial_table.columns:
-        print(trial_table["screen_role"].value_counts(dropna=False))
-    else:
-        print("No screen_role column found.")
+def main():
+    print("===== Building 8-direction single-screen trial table from multiple stimlogs =====")
 
-    if "unknown" in trial_table.get("screen_role", pd.Series(dtype=str)).astype(str).values:
-        print(
-            "\nWarning: some trials have screen_role='unknown'. "
-            "Check Active_monitor_config_index / Active_monitor_label / Active_screen_number, "
-            "or set MANUAL_SCREEN_ROLE."
+    if len(STIMLOG_RUNS) == 0:
+        raise ValueError("STIMLOG_RUNS is empty. Add runs in SB0_config_analysis.py.")
+
+    if not TTL_GLOBAL_PATH.exists():
+        raise FileNotFoundError(
+            f"Global TTL file not found: {TTL_GLOBAL_PATH}\n"
+            "Run updated SB01_extract_events.py first."
         )
 
-    # -----------------------------
-    # Save outputs
-    # -----------------------------
+    ttl_global = pd.read_csv(TTL_GLOBAL_PATH)
+
+    if "original_segment_index" not in ttl_global.columns:
+        raise ValueError(
+            "ttl_events_global.csv must contain original_segment_index. "
+            "Check updated SB01_extract_events.py."
+        )
+
+    ttl_time_col_global = get_ttl_time_col(ttl_global)
+
+    ttl_global = (
+        ttl_global
+        .sort_values(ttl_time_col_global)
+        .reset_index(drop=True)
+    )
+
+    print(f"TTL global rows: {len(ttl_global)}")
+    print(f"Using global TTL time column: {ttl_time_col_global}")
+
+    print("\nTTL counts by original_segment_index:")
+    print(ttl_global.groupby("original_segment_index").size())
+
+    updated_stimlogs = []
+    alignment_qcs = []
+    trial_tables = []
+
+    global_trial_id_start = 0
+
+    for run_index, run_cfg in enumerate(STIMLOG_RUNS):
+        updated_stimlog, alignment_qc, trial_table = process_one_run(
+            run_cfg=run_cfg,
+            run_index=run_index,
+            ttl_global=ttl_global,
+            global_trial_id_start=global_trial_id_start,
+        )
+
+        updated_stimlogs.append(updated_stimlog)
+        alignment_qcs.append(alignment_qc)
+        trial_tables.append(trial_table)
+
+        global_trial_id_start += len(trial_table)
+
+    updated_all = pd.concat(updated_stimlogs, ignore_index=True)
+    alignment_all = pd.concat(alignment_qcs, ignore_index=True)
+    trial_all = pd.concat(trial_tables, ignore_index=True)
+
+    # Optional global expected count check.
+    if EXPECTED_MOTION_TTL_COUNT is not None:
+        print(f"\nExpected motion TTL count from config: {EXPECTED_MOTION_TTL_COUNT}")
+        print(f"Total detected trials across STIMLOG_RUNS: {len(trial_all)}")
+        if len(trial_all) != EXPECTED_MOTION_TTL_COUNT:
+            print(
+                "Warning: total detected trials does not match EXPECTED_MOTION_TTL_COUNT. "
+                "This may be fine if EXPECTED_MOTION_TTL_COUNT was set for one run only."
+            )
+
+    print("\nTrial counts by screen_role:")
+    print(trial_all["screen_role"].value_counts(dropna=False))
+
+    print("\nTrial counts by original_segment_index:")
+    print(trial_all["original_segment_index"].value_counts(dropna=False).sort_index())
+
+    print("\nAlignment residuals by run:")
+    print(
+        alignment_all
+        .groupby(["screen_role", "original_segment_index"], dropna=False)["residual_ms"]
+        .describe()
+    )
 
     alignment_qc_path = ANALYSIS_OUTPUT_DIR / "alignment_qc.csv"
     updated_stimlog_path = ANALYSIS_OUTPUT_DIR / "updated_stimlog.csv"
     trial_table_path = ANALYSIS_OUTPUT_DIR / "trial_table.csv"
 
-    alignment_qc.to_csv(alignment_qc_path, index=False)
-    updated_stimlog.to_csv(updated_stimlog_path, index=False)
-    trial_table.to_csv(trial_table_path, index=False)
+    alignment_all.to_csv(alignment_qc_path, index=False)
+    updated_all.to_csv(updated_stimlog_path, index=False)
+    trial_all.to_csv(trial_table_path, index=False)
 
     print("\n===== Saved =====")
     print(alignment_qc_path)
@@ -320,7 +460,7 @@ def main():
     print(trial_table_path)
 
     print("\nFirst few trials:")
-    print(trial_table.head())
+    print(trial_all.head())
 
 
 if __name__ == "__main__":

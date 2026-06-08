@@ -11,14 +11,14 @@ import sys
 #     "SB06_compute_significance.py",
 # ]
 
-# scripts = [
-#     "SB01_extract_events.py",
-#     "SB02b_build_trial_table_12patterns_3screen.py",
-#     "SB03_export_curated_spikes.py",
-#     "SB04b_label_spikes_12patterns_3screen.py",
-#     "SB05b_compute_12patterns_summary.py",
-#     "SB06b_compute_12patterns_significance.py",
-# ]
+scripts = [
+    "SB01_extract_events.py",
+    "SB02b_build_trial_table_12patterns_3screen.py",
+    "SB03_export_curated_spikes.py",
+    "SB04b_label_spikes_12patterns_3screen.py",
+    "SB05b_compute_12patterns_summary.py",
+    "SB06b_compute_12patterns_significance.py",
+]
 
 # scripts = [
 #     "SB01_extract_events.py",
@@ -29,14 +29,14 @@ import sys
 #     "SB06c_compute_8directions_significance.py",
 # ]
 
-scripts = [
-    "SB01a_extract_events_concatanated.py",
-    "SB02a1_build_trial_table_8directions_1screen.py",
-    "SB03_export_curated_spikes.py",
-    "SB04a1_label_spikes_8directions_1screen.py",
-    "SB05a1_compute_8directions_summary.py",
-    "SB06a1_compute_8directions_significance.py",
-]
+# scripts = [
+#     "SB01a_extract_events_concatenated.py",
+#     "SB02a1_build_trial_table_8directions_1screen.py",
+#     "SB03_export_curated_spikes.py",
+#     "SB04a1_label_spikes_8directions_1screen.py",
+#     "SB05a1_compute_8directions_summary.py",
+#     "SB06a1_compute_8directions_significance.py",
+# ]
 
 for script in scripts:
     print(f"\n===== Running {script} =====")

@@ -6,7 +6,7 @@ from config_local import RAW_DATA
 print("Loading...")
 
 bird = "TG915"
-date = "2026-05-27_16-32-17"
+date = "2026-05-27_21-19-20"
 
 folder = RAW_DATA / bird / date
 
