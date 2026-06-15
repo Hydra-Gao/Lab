@@ -137,6 +137,8 @@ def export_one_sorter_to_phy(sorter_name, recording):
         analyzer,
         output_folder=phy_folder,
         remove_if_exists=True,
+        # compute_pc_features=False,
+        # compute_amplitudes=False,
     )
 
     print(f"Exported Phy folder: {phy_folder}")

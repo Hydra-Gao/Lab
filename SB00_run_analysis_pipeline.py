@@ -29,6 +29,15 @@ scripts = [
 #     "SB06c_compute_8directions_significance.py",
 # ]
 
+# scripts = [
+#     "SB01a_extract_events_concatenated.py",
+#     "SB02a1_build_trial_table_8directions_1screen.py",
+#     "SB03_export_curated_spikes.py",
+#     "SB04a1_label_spikes_8directions_1screen.py",
+#     "SB05a1_compute_8directions_summary.py",
+#     "SB06a1_compute_8directions_significance.py",
+# ]
+
 for script in scripts:
     print(f"\n===== Running {script} =====")
     subprocess.run([sys.executable, script], check=True)
