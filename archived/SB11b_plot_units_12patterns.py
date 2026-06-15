@@ -165,29 +165,6 @@ def available_pattern_order(df):
     return ordered + extras
 
 
-def sorted_unique_nonnull(values):
-    vals = pd.Series(values).dropna().unique().tolist()
-    try:
-        return sorted(vals)
-    except Exception:
-        return vals
-
-
-def filter_by_speed(df, speed_value):
-    """Filter a table by speed_deg_per_sec when that column exists."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-    if speed_value is None or "speed_deg_per_sec" not in df.columns:
-        return df.copy()
-    return df[df["speed_deg_per_sec"] == speed_value].copy()
-
-
-def speed_label(speed_value):
-    if speed_value is None or pd.isna(speed_value):
-        return "all speeds"
-    return f"speed {safe_float(speed_value):g} deg/s"
-
-
 def add_epoch_background(ax):
     """Shade static and moving windows."""
     ax.axvspan(TIME_RANGE[0], 0, alpha=0.08)
@@ -424,102 +401,8 @@ def plot_pattern_response_summary(ax, trial_unit, pattern_unit, pattern_order):
         rotation=45,
         ha="right",
     )
-    ax.set_ylabel("Moving - pooled baseline FR")
-    ax.set_title("Pattern response summary\npooled baseline, trials + mean ± SEM")
-
-
-def plot_baseline_moving_fr_summary(ax, trial_unit, pattern_unit, pattern_order):
-    """
-    Plot pooled baseline FR and moving FR by pattern.
-
-    Raw data dots are shown only for moving FR, as requested.
-    Baseline is the pooled static baseline already computed in SB05b.
-    """
-    require_columns(
-        trial_unit,
-        ["pattern", "trial_id", "moving_fr"],
-        "trial_unit",
-    )
-
-    df_trial = trial_unit[
-        ["pattern", "trial_id", "moving_fr"]
-    ].dropna(subset=["pattern", "moving_fr"]).copy()
-
-    x = np.arange(len(pattern_order))
-    rng = np.random.default_rng(42)
-
-    # Raw moving-FR dots only.
-    for i, pattern in enumerate(pattern_order):
-        vals = df_trial.loc[
-            df_trial["pattern"] == pattern,
-            "moving_fr",
-        ].to_numpy(dtype=float)
-
-        if len(vals) == 0:
-            continue
-
-        jitter = rng.uniform(-0.10, 0.10, size=len(vals))
-        ax.scatter(
-            np.full(len(vals), i) + jitter,
-            vals,
-            s=18,
-            alpha=0.65,
-            label="moving trials" if i == 0 else None,
-        )
-
-    baseline_mean = []
-    baseline_sem = []
-    moving_mean = []
-    moving_sem = []
-
-    for pattern in pattern_order:
-        row = pattern_unit[pattern_unit["pattern"] == pattern]
-
-        if len(row) == 0:
-            moving_vals = df_trial.loc[
-                df_trial["pattern"] == pattern,
-                "moving_fr",
-            ].to_numpy(dtype=float)
-
-            baseline_mean.append(np.nan)
-            baseline_sem.append(np.nan)
-            moving_mean.append(np.nanmean(moving_vals) if len(moving_vals) > 0 else np.nan)
-            moving_sem.append(sem(moving_vals) if len(moving_vals) > 0 else np.nan)
-        else:
-            r = row.iloc[0]
-            baseline_mean.append(safe_float(r.get("baseline_fr_mean", np.nan)))
-            baseline_sem.append(safe_float(r.get("baseline_fr_sem", np.nan)))
-            moving_mean.append(safe_float(r.get("moving_fr_mean", np.nan)))
-            moving_sem.append(safe_float(r.get("moving_fr_sem", np.nan)))
-
-    ax.errorbar(
-        x,
-        baseline_mean,
-        yerr=baseline_sem,
-        fmt="-o",
-        capsize=4,
-        linewidth=1.5,
-        label="pooled baseline FR",
-    )
-    ax.errorbar(
-        x,
-        moving_mean,
-        yerr=moving_sem,
-        fmt="-o",
-        capsize=4,
-        linewidth=1.5,
-        label="moving FR",
-    )
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(
-        [short_pattern_name(p) for p in pattern_order],
-        rotation=45,
-        ha="right",
-    )
-    ax.set_ylabel("FR (spikes/s)")
-    ax.set_title("Baseline & moving FR\nmoving raw dots + mean ± SEM")
-    ax.legend(fontsize=8)
+    ax.set_ylabel("Moving - baseline FR")
+    ax.set_title("Pattern response summary\n(trials + mean ± SEM)")
 
 
 def get_pattern_label_from_sig_row(row):
@@ -547,16 +430,15 @@ def get_pattern_label_from_sig_row(row):
     return "ns"
 
 
-def add_pattern_stats_text(ax, unit_id, speed_value, sig_unit, pattern_order):
+def add_pattern_stats_text(ax, unit_id, sig_unit, pattern_order):
     """Add pattern-specific raw p-values as text."""
     ax.axis("off")
 
     lines = [
         f"Unit {unit_id}",
-        f"{speed_label(speed_value)}",
         "",
         "Pattern-level motion test:",
-        "diff = moving FR - pooled static baseline FR",
+        "diff = moving FR - baseline/static FR",
         "",
         "Columns:",
         "mean | p2 | pR | pS | label",
@@ -665,9 +547,7 @@ def plot_one_unit(
         print(f"Skipping unit {unit_id}: no trial summary.")
         return
 
-    # Each analysis run should contain only one speed. Keep all rows together.
-    # If a mixed-speed file is accidentally used, this still plots all rows together
-    # rather than creating extra pages.
+    # Use all observed patterns for this unit, but keep the planned order.
     pattern_order = available_pattern_order(trial_unit)
 
     if len(pattern_order) == 0:
@@ -721,6 +601,7 @@ def plot_one_unit(
                 pattern=pattern,
             )
 
+        # Hide extra axes if pattern list ever changes
         for ax in axes.flat[len(PATTERN_ORDER):]:
             ax.axis("off")
 
@@ -736,16 +617,14 @@ def plot_one_unit(
         plt.close(fig2)
 
         # -------------------------
-        # Page 3: response summary + baseline/moving FR + stats
+        # Page 3: response summary + stats
         # -------------------------
-        fig3 = plt.figure(figsize=(17, 12))
+        fig3 = plt.figure(figsize=(17, 10))
         gs = fig3.add_gridspec(
-            2,
+            1,
             2,
             width_ratios=[1.55, 1.0],
-            height_ratios=[1.0, 1.0],
             wspace=0.25,
-            hspace=0.45,
         )
 
         ax_response = fig3.add_subplot(gs[0, 0])
@@ -756,19 +635,10 @@ def plot_one_unit(
             pattern_order=PATTERN_ORDER,
         )
 
-        ax_fr = fig3.add_subplot(gs[1, 0])
-        plot_baseline_moving_fr_summary(
-            ax=ax_fr,
-            trial_unit=trial_unit,
-            pattern_unit=pattern_unit,
-            pattern_order=PATTERN_ORDER,
-        )
-
-        ax_text = fig3.add_subplot(gs[:, 1])
+        ax_text = fig3.add_subplot(gs[0, 1])
         add_pattern_stats_text(
             ax=ax_text,
             unit_id=unit_id,
-            speed_value=None,
             sig_unit=sig_unit,
             pattern_order=PATTERN_ORDER,
         )
@@ -779,6 +649,7 @@ def plot_one_unit(
         plt.close(fig3)
 
     print(f"Saved: {out_path}")
+
 
 # =====================
 # Main
@@ -833,7 +704,6 @@ def main():
             "unit_id",
             "trial_id",
             "pattern",
-            "moving_fr",
             "moving_minus_baseline",
         ],
         "unit_trial_summary.csv",
@@ -844,10 +714,6 @@ def main():
         [
             "unit_id",
             "pattern",
-            "baseline_fr_mean",
-            "baseline_fr_sem",
-            "moving_fr_mean",
-            "moving_fr_sem",
             "moving_minus_baseline_mean",
             "moving_minus_baseline_sem",
         ],

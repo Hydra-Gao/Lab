@@ -109,7 +109,6 @@ def main():
     ]
 
     optional_metadata_cols = [
-        "baseline_pool",
         "biological_label",
         "left_movement",
         "front_movement",

@@ -39,33 +39,6 @@ def sem(x):
     return np.std(x, ddof=1) / np.sqrt(len(x))
 
 
-# =====================
-# Pooled static-baseline definition
-# =====================
-# Pool A: two VA + two expansion + two contraction patterns.
-# For each unit × speed, all static/baseline FR values from these patterns
-# are averaged to make one shared baseline.
-#
-# Pool B: the remaining six patterns.
-# For each unit × speed, all static/baseline FR values from these patterns
-# are averaged to make a second shared baseline.
-POOLED_BASELINE_POOL_A_PATTERNS = {
-    "VAr",
-    "VAl",
-    "EXPANSION_l",
-    "EXPANSION_r",
-    "CONTRACTION_left",
-    "CONTRACTION_right",
-}
-
-
-def get_baseline_pool(pattern):
-    """Return the pooled-baseline group for one VbC pattern."""
-    if pattern in POOLED_BASELINE_POOL_A_PATTERNS:
-        return "VA_EXP_CON_pool"
-    return "OTHER_6_pool"
-
-
 def main():
     print("===== Compute VbC three-screen pattern summary =====")
 
@@ -154,19 +127,11 @@ def main():
                     "phase_step": tr["phase_step"],
                     "speed_deg_per_sec": tr["speed_deg_per_sec"],
 
-                    "baseline_pool": get_baseline_pool(tr["pattern"]),
-
                     "baseline_count": baseline_count,
                     "early_count": early_count,
                     "sustained_count": sustained_count,
                     "moving_count": moving_count,
 
-                    # Raw per-trial static/baseline FR before pooling.
-                    "raw_baseline_fr": baseline_fr,
-
-                    # These are temporarily per-trial values. After the trial
-                    # table is built, baseline_fr is replaced by the pooled
-                    # unit × speed × baseline_pool mean.
                     "baseline_fr": baseline_fr,
                     "early_fr": early_fr,
                     "sustained_fr": sustained_fr,
@@ -181,49 +146,12 @@ def main():
     unit_trial_summary = pd.DataFrame(rows)
 
     # -----------------------------
-    # Replace per-pattern baseline with pooled static baseline
-    # -----------------------------
-    # The pooled baseline is computed separately for each unit × speed.
-    # Within each speed, the six VA/expansion/contraction patterns share one
-    # baseline; the other six patterns share another baseline.
-    baseline_pool_stats = (
-        unit_trial_summary
-        .groupby(["unit_id", "speed_deg_per_sec", "baseline_pool"], dropna=False)
-        .agg(
-            pooled_baseline_fr=("raw_baseline_fr", "mean"),
-            pooled_baseline_fr_sem=("raw_baseline_fr", sem),
-            pooled_baseline_n_trials=("trial_id", "nunique"),
-        )
-        .reset_index()
-    )
-
-    unit_trial_summary = unit_trial_summary.merge(
-        baseline_pool_stats,
-        on=["unit_id", "speed_deg_per_sec", "baseline_pool"],
-        how="left",
-    )
-
-    unit_trial_summary["baseline_fr"] = unit_trial_summary["pooled_baseline_fr"]
-    unit_trial_summary["baseline_fr_sem"] = unit_trial_summary["pooled_baseline_fr_sem"]
-
-    unit_trial_summary["moving_minus_baseline"] = (
-        unit_trial_summary["moving_fr"] - unit_trial_summary["baseline_fr"]
-    )
-    unit_trial_summary["early_minus_baseline"] = (
-        unit_trial_summary["early_fr"] - unit_trial_summary["baseline_fr"]
-    )
-    unit_trial_summary["sustained_minus_baseline"] = (
-        unit_trial_summary["sustained_fr"] - unit_trial_summary["baseline_fr"]
-    )
-
-    # -----------------------------
     # Unit × pattern × speed summary
     # -----------------------------
 
     group_cols = [
         "unit_id",
         "pattern",
-        "baseline_pool",
         "biological_label",
         "left_movement",
         "front_movement",
@@ -240,10 +168,7 @@ def main():
             n_trials=("trial_id", "nunique"),
 
             baseline_fr_mean=("baseline_fr", "mean"),
-            baseline_fr_sem=("baseline_fr_sem", "first"),
-            raw_baseline_fr_mean=("raw_baseline_fr", "mean"),
-            raw_baseline_fr_sem=("raw_baseline_fr", sem),
-            pooled_baseline_n_trials=("pooled_baseline_n_trials", "first"),
+            baseline_fr_sem=("baseline_fr", sem),
 
             early_fr_mean=("early_fr", "mean"),
             early_fr_sem=("early_fr", sem),
