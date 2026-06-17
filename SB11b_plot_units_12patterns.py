@@ -533,15 +533,16 @@ def get_pattern_label_from_sig_row(row):
         p_motion_specific_two_sided < ALPHA and mean < 0
     """
     mean_val = safe_float(row.get("mean_moving_minus_baseline", np.nan))
-    p2 = safe_float(row.get("p_motion_specific_two_sided", np.nan))
+    # p2 = safe_float(row.get("p_motion_specific_two_sided", np.nan))
+    pT = safe_float(row.get("p_ttest_two_sided", np.nan))
 
-    if np.isnan(mean_val) or np.isnan(p2):
+    if np.isnan(mean_val) or np.isnan(pT):
         return "ns"
 
-    if p2 < ALPHA and mean_val > 0:
+    if pT < ALPHA and mean_val > 0:
         return "resp*"
 
-    if p2 < ALPHA and mean_val < 0:
+    if pT < ALPHA and mean_val < 0:
         return "supp*"
 
     return "ns"
@@ -559,7 +560,7 @@ def add_pattern_stats_text(ax, unit_id, speed_value, sig_unit, pattern_order):
         "diff = moving FR - pooled static baseline FR",
         "",
         "Columns:",
-        "mean | p2 | pR | pS | label",
+        "mean | p2 | pR | pS | pTtest | label",
         "",
     ]
 
@@ -589,6 +590,7 @@ def add_pattern_stats_text(ax, unit_id, speed_value, sig_unit, pattern_order):
         p2 = r.get("p_motion_specific_two_sided", np.nan)
         p_resp = r.get("p_motion_responsive", np.nan)
         p_supp = r.get("p_motion_suppressed", np.nan)
+        p_ttest = r.get("p_ttest_two_sided", np.nan)
 
         label = get_pattern_label_from_sig_row(r)
 
@@ -598,6 +600,7 @@ def add_pattern_stats_text(ax, unit_id, speed_value, sig_unit, pattern_order):
             f"{fmt_p(p2):>6} | "
             f"{fmt_p(p_resp):>6} | "
             f"{fmt_p(p_supp):>6} | "
+            f"{fmt_p(p_ttest):>6} | "
             f"{label}"
         )
 
