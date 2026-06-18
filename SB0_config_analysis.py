@@ -2,7 +2,7 @@ from pathlib import Path
 from config_local import RAW_DATA, WORKING_DIR, OUTPUT_DIR, SEGMENT_INDEX_TO_USE
 
 BIRD = "TG915"
-SESSION = "2026-05-27_21-19-20"
+SESSION = "2026-05-27_16-32-17"
 SORTER_NAME = "kilosort4" 
 # SORTER_NAME = "mountainsort5"
 
@@ -14,36 +14,36 @@ EVENTS_NEV_PATH = RAW_NLX_FOLDER / "Events.nev"
 # STIMLOG_PATH = Path(r"F:\Work\UBC\Lab\Data\TG884\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0x20c9.csv")
 # STIMLOG_PATH = Path(r"E:\Lab\_analyzed\Section_1-1\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 # STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_op_s__2026_05_27_VbC_12patterns_3screens_001.csv")
-STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_op_s_correct__2026_05_27_VbC_12patterns_3screens_001.csv")
+# STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_op_s_correct__2026_05_27_VbC_12patterns_3screens_001.csv")
 # STIMLOG_PATH = Path(r"E:\Lab\Data\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
 
 # =====================
 # Stimlog runs for concatenated single-screen recordings
 # =====================
 
-# STIMLOG_RUNS = [
-#     {
-#         "stimlog_path": Path(
-#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_F_correct_2026_05_27_screen0_8dir_2speeds_001.csv"
-#         ),
-#         "original_segment_index": 4,
-#         "screen_role": "front",
-#     },
-#     {
-#         "stimlog_path": Path(
-#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_L_2026_05_27_screen1_8dir_2speeds_001.csv"
-#         ),
-#         "original_segment_index": 5,
-#         "screen_role": "left",
-#     },
-#     {
-#         "stimlog_path": Path(
-#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_R_2026_05_27_screen3_8dir_2speeds_001.csv"
-#         ),
-#         "original_segment_index": 6,
-#         "screen_role": "right",
-#     },
-# ]
+STIMLOG_RUNS = [
+    {
+        "stimlog_path": Path(
+            r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_F_correct_2026_05_27_screen0_8dir_2speeds_001.csv"
+        ),
+        "original_segment_index": 2,
+        "screen_role": "front",
+    },
+    {
+        "stimlog_path": Path(
+            r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_L_2026_05_27_screen1_8dir_2speeds_001.csv"
+        ),
+        "original_segment_index": 3,
+        "screen_role": "left",
+    },
+    {
+        "stimlog_path": Path(
+            r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site2_R_2026_05_27_screen3_8dir_2speeds_001.csv"
+        ),
+        "original_segment_index": 4,
+        "screen_role": "right",
+    },
+]
 
 
 PREPROCESSED_FOLDER = WORKING_DIR / "preprocessed_M12"
