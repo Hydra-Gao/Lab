@@ -12,7 +12,7 @@ import sys
 # ]
 
 scripts = [
-    "SB01_extract_events.py",
+    "SB01_extract_events_dedup_12patterns.py",
     "SB02b_build_trial_table_12patterns_3screen.py",
     "SB03_export_curated_spikes.py",
     "SB04b_label_spikes_12patterns_3screen.py",

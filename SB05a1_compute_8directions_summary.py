@@ -29,8 +29,8 @@ from SB0_config_analysis import (
     MOVING_WINDOW,
 )
 
-BASELINE_POOLING_MODE = "screen_global_static"
-# BASELINE_POOLING_MODE = "screen_axis_static"
+# BASELINE_POOLING_MODE = "screen_global_static"
+BASELINE_POOLING_MODE = "screen_axis_static"
 # BASELINE_POOLING_MODE = "trail_window_specific"
 
 

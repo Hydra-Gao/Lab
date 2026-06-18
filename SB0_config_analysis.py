@@ -24,23 +24,23 @@ STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_S
 # STIMLOG_RUNS = [
 #     {
 #         "stimlog_path": Path(
-#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site1_F_2026_05_27_screen0_8dir_2speeds_001.csv"
+#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_F_correct_2026_05_27_screen0_8dir_2speeds_001.csv"
 #         ),
 #         "original_segment_index": 4,
 #         "screen_role": "front",
 #     },
 #     {
 #         "stimlog_path": Path(
-#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site1_L_2026_05_27_screen1_8dir_2speeds_001.csv"
+#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_L_2026_05_27_screen1_8dir_2speeds_001.csv"
 #         ),
-#         "original_segment_index": 6,
+#         "original_segment_index": 5,
 #         "screen_role": "left",
 #     },
 #     {
 #         "stimlog_path": Path(
-#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site1_R_2026_05_27_screen3_8dir_2speeds_001.csv"
+#             r"G:\Lab\Raw_data\TG915\stimulus_logs\2026-05-27_TG915_VbC_Site3_R_2026_05_27_screen3_8dir_2speeds_001.csv"
 #         ),
-#         "original_segment_index": 7,
+#         "original_segment_index": 6,
 #         "screen_role": "right",
 #     },
 # ]
@@ -88,7 +88,7 @@ SAMPLING_FREQUENCY = 32000.0
 # EXPECTED_MOTION_TTL_COUNT = 20
 
 # # TG915(VbC): 12 patterns × 6 replicates × 1 speed = 72 moving epochs.
-# EXPECTED_MOTION_TTL_COUNT = 72
+EXPECTED_MOTION_TTL_COUNT = 72
 
 # TG915(VbC): 8 directions × 6 replicates × 2 speed = 96 moving epochs.
-EXPECTED_MOTION_TTL_COUNT = 288
+# EXPECTED_MOTION_TTL_COUNT = 288

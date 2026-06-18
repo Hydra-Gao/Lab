@@ -69,7 +69,7 @@ def paired_ttest_on_diff(diff):
     n = len(diff)
 
     if n < 2:
-        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
     mean_diff = np.mean(diff)
     sd_diff = np.std(diff, ddof=1)
@@ -80,9 +80,10 @@ def paired_ttest_on_diff(diff):
         # If mean_diff is also 0, no effect.
         # If mean_diff != 0, t-test is mathematically degenerate.
         if mean_diff == 0:
-            return mean_diff, sem_diff, np.nan, 1.0, 1.0, 1.0
+            return mean_diff, sem_diff, np.nan, 1.0, 1.0, 1.0, np.nan
         else:
-            return mean_diff, sem_diff, np.nan, 0.0, 0.0 if mean_diff > 0 else 1.0, 0.0 if mean_diff < 0 else 1.0
+            cohen_dz = np.inf if mean_diff > 0 else -np.inf
+            return mean_diff, sem_diff, np.nan, 0.0, 0.0 if mean_diff > 0 else 1.0, 0.0 if mean_diff < 0 else 1.0, cohen_dz
 
     t_stat, p_two = stats.ttest_1samp(
         diff,
