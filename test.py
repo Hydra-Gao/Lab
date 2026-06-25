@@ -1,102 +1,134 @@
-# import spikeinterface.full as si
-# from config_local import WORKING_DIR, SEGMENT_INDEX_TO_USE
+import numpy as np
+import spikeinterface.extractors as se
+import spikeinterface as si
+from pathlib import Path
+from spikeinterface.core import BinaryFolderRecording
 
-# # 这里按你的实际 sorter 改
-# SORTER_NAME = "kilosort4"
+RAW_FOLDER = r"G:\Lab\Raw_data\TG964\2026-06-24_13-48-39"
+OUT_ROOT = Path(r"G:\Lab\Processing\Working_dir_processing\split_experiments")
 
-# recording = si.load(WORKING_DIR / "preprocessed_M12")
+EXP1_SEGMENTS = [0, 1]
+EXP2_SEGMENT = 3
+EXP3_SEGMENT = 4
 
-# # 和你 sorting 时保持一致：你 SS2 里用了 select_segments([1])
-# recording_seg = recording.select_segments([SEGMENT_INDEX_TO_USE])
+EXP2_CUT_TIME_SEC = 1864.0
+EXP3_CUT_TIME_SEC = 1768.0
 
-# sorting = si.load(WORKING_DIR / f"{SORTER_NAME}_M12_test_output")
+raw_rec = se.read_neuralynx(RAW_FOLDER)
 
-# n_frames = recording_seg.get_num_frames(segment_index=0)
+print("Raw data read")
 
-# print("Recording frames:", n_frames)
-# print("Recording duration sec:", recording_seg.get_total_duration())
+exp1 = BinaryFolderRecording(OUT_ROOT / "experiment_1")
+exp2 = BinaryFolderRecording(OUT_ROOT / "experiment_2")
+exp3 = BinaryFolderRecording(OUT_ROOT / "experiment_3")
 
-# total_excess = 0
+fs = raw_rec.get_sampling_frequency()
 
-# for unit_id in sorting.get_unit_ids():
-#     spikes = sorting.get_unit_spike_train(unit_id=unit_id, segment_index=0)
+exp2_cut_frame = int(round(EXP2_CUT_TIME_SEC * fs))
+exp3_cut_frame = int(round(EXP3_CUT_TIME_SEC * fs))
 
-#     excess_mask = spikes >= n_frames
-#     n_excess = excess_mask.sum()
+print("Cut frames calculated")
 
-#     if n_excess > 0:
-#         total_excess += n_excess
-#         print(
-#             f"Unit {unit_id}: {n_excess} excess spikes "
-#             f"/ {len(spikes)} total, "
-#             f"max_frame={spikes.max()}"
-#         )
+def compare_trace_block(
+    raw_recording,
+    saved_recording,
+    raw_segment_index,
+    saved_segment_index,
+    raw_start_frame,
+    saved_start_frame,
+    num_frames=32000,
+    channel_ids=None,
+    label=""
+):
+    if channel_ids is None:
+        channel_ids = raw_recording.channel_ids
 
-# print("\nTotal excess spikes:", total_excess)
+    raw_traces = raw_recording.get_traces(
+        segment_index=raw_segment_index,
+        start_frame=raw_start_frame,
+        end_frame=raw_start_frame + num_frames,
+        channel_ids=channel_ids,
+        return_scaled=False,
+    )
 
-import pandas as pd
+    saved_traces = saved_recording.get_traces(
+        segment_index=saved_segment_index,
+        start_frame=saved_start_frame,
+        end_frame=saved_start_frame + num_frames,
+        channel_ids=channel_ids,
+        return_scaled=False,
+    )
 
-DIR = r"G:\Lab\Processing\Output_dir_almost\analysis_TG915_2026-05-27_16-32-17_kilosort4"
+    same = np.array_equal(raw_traces, saved_traces)
+    max_abs_diff = np.max(np.abs(raw_traces.astype("float64") - saved_traces.astype("float64")))
 
-# # after SB01
-# ttl = pd.read_csv(DIR + "/ttl_events_global.csv")
-# print(ttl.groupby("original_segment_index").size())
+    print(f"\n{label}")
+    print("  same:", same)
+    print("  max_abs_diff:", max_abs_diff)
 
-# # after SB02
-# trials = pd.read_csv(DIR + "/trial_table.csv")
-# print(trials.groupby(["original_segment_index", "screen_role"]).size())
-# print(trials.groupby(["screen_role", "speed", "direction"]).size())
-# print((trials["moving_start_sec"] - trials["static_start_sec"]).describe())
-# print((trials["ttl_time_sec"] - trials["moving_start_sec"]).describe())
 
-# # after SB04
-# labeled = pd.read_csv(DIR + "/labeled_spikes.csv")
-# print(labeled.groupby(["stimulus_state", "screen_role", "speed"]).size())
-# trials = pd.read_csv(DIR + "/trial_table.csv")
-# print(trials.groupby(["screen_role", "speed"]).size())
-# print(trials.groupby(["screen_role", "speed", "direction"]).size())
-# trials["static_duration"] = trials["static_end_sec"] - trials["static_start_sec"]
-# trials["moving_duration"] = trials["moving_end_sec"] - trials["moving_start_sec"]
-# print(trials.groupby(["screen_role", "speed"])[["static_duration", "moving_duration"]].describe())
-# dup = labeled.duplicated(
-#     subset=["unit_id", "spike_time_sec", "stimulus_state"],
-#     keep=False
-# )
-# print("Duplicated labeled spikes:", dup.sum())
-
-# after SB05
-# cond = pd.read_csv(DIR + "/unit_condition_summary.csv")
-# print(cond.groupby(["screen_role", "speed"]).size())
-# print(cond.groupby(["screen_role", "speed", "direction"])["n_trials"].describe())
-trial = pd.read_csv(DIR + "/unit_trial_summary.csv")
-# print(trial.groupby(["screen_role", "speed"]).size())
-# print(trial.groupby(["screen_role", "speed", "direction"]).size())
-# cols = [
-#     "baseline_fr",
-#     "static_fr",
-#     "moving_fr",
-#     "early_fr",
-#     "sustained_fr",
-#     "moving_minus_baseline",
-#     "moving_minus_static",
-# ]
-# print(trial[cols].isna().sum())
-# print(trial[cols].describe())
-
-print(trial.groupby(["screen_role", "speed", "direction"])["pooled_baseline_fr"].mean())
-# 情况 1：
-# 同一个 unit × screen_role 下 pooled_baseline_fr 应该完全一样
-# 情况 2：
-# 同一个 unit × screen_role × direction_axis 下 pooled_baseline_fr 应该完全一样
-print(
-    trial.groupby(["unit_id", "screen_role", "direction_axis"])["pooled_baseline_fr"]
-    .nunique()
-    .describe()
+# Experiment 1:
+# saved exp1 segment 0 应该等于 raw segment EXP1_SEGMENTS[0]
+compare_trace_block(
+    raw_rec, exp1,
+    raw_segment_index=EXP1_SEGMENTS[0],
+    saved_segment_index=0,
+    raw_start_frame=10000,
+    saved_start_frame=10000,
+    label="Exp1 segment 0 check"
 )
 
+# saved exp1 segment 1 应该等于 raw segment EXP1_SEGMENTS[1]
+compare_trace_block(
+    raw_rec, exp1,
+    raw_segment_index=EXP1_SEGMENTS[1],
+    saved_segment_index=1,
+    raw_start_frame=10000,
+    saved_start_frame=10000,
+    label="Exp1 segment 1 check"
+)
 
-# # after SB06
-# sig = pd.read_csv(DIR + "/unit_significance_summary.csv")
-# print(sig.groupby(["screen_role", "speed"])[
-#     ["is_motion_baseline_responsive", "is_motion_baseline_suppressed", "is_direction_tuned_motion_baseline"]
-# ].sum())
+print("\nComparison 1 done.")
+
+# Experiment 2:
+# saved exp2 segment 0 = raw EXP2_SEGMENT 从 0 到 cut_frame
+compare_trace_block(
+    raw_rec, exp2,
+    raw_segment_index=EXP2_SEGMENT,
+    saved_segment_index=0,
+    raw_start_frame=10000,
+    saved_start_frame=10000,
+    label="Exp2 segment 0 check"
+)
+
+# saved exp2 segment 1 = raw EXP2_SEGMENT 从 cut_frame 之后开始
+compare_trace_block(
+    raw_rec, exp2,
+    raw_segment_index=EXP2_SEGMENT,
+    saved_segment_index=1,
+    raw_start_frame=exp2_cut_frame + 10000,
+    saved_start_frame=10000,
+    label="Exp2 segment 1 check"
+)
+
+print("\nComparison 2 done.")
+
+# Experiment 3:
+compare_trace_block(
+    raw_rec, exp3,
+    raw_segment_index=EXP3_SEGMENT,
+    saved_segment_index=0,
+    raw_start_frame=10000,
+    saved_start_frame=10000,
+    label="Exp3 segment 0 check"
+)
+
+compare_trace_block(
+    raw_rec, exp3,
+    raw_segment_index=EXP3_SEGMENT,
+    saved_segment_index=1,
+    raw_start_frame=exp3_cut_frame + 10000,
+    saved_start_frame=10000,
+    label="Exp3 segment 1 check"
+)
+print("\nComparison 3 done.")

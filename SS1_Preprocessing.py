@@ -1,21 +1,24 @@
 from pathlib import Path
 import spikeinterface.full as si
 import probeinterface as pi
-from config_local import RAW_DATA
 import numpy as np
+from config_local import RAW_DATA
+from spikeinterface.core import BinaryFolderRecording
 
 print("Loading...")
 
-bird = "TG915"
-date = "2026-05-27_21-19-20"
+bird = "TG964"
+date = "split_experiments/experiment_1"
 
-folder = RAW_DATA / bird / date
+folder = RAW_DATA / bird / date 
 
 #folder = Path(r"C:\Users\15018\Desktop\Data\Neuralynx\2026-04-27_18-54-07") 
 
-REFERENCE_CSC_CHANNEL = 15   # change this only
+# recording = si.read_neuralynx(folder)
+recording = BinaryFolderRecording(folder)
 
-recording = si.read_neuralynx(folder)
+# If the reference was physical site 2, then site_to_ad says AD channel = 16.
+REFERENCE_SITE = 10   # <-- CHANGE THIS to your actual reference site
 
 info_lines = []
 
@@ -68,22 +71,31 @@ site_to_ad = {
     29: 15, 30: 23, 31: 0, 32: 24,
 }
 
-if REFERENCE_CSC_CHANNEL not in site_to_ad:
-    raise ValueError(
-        f"REFERENCE_CSC_CHANNEL={REFERENCE_CSC_CHANNEL} is invalid. "
-        f"Must be one of {list(site_to_ad.keys())}."
-    )
+# site_order_tip_to_base = list(range(32, 0, -1))
+# ad_order_tip_to_base = [site_to_ad[site] for site in site_order_tip_to_base]
 
-REFERENCE_AD_CHANNEL = site_to_ad[REFERENCE_CSC_CHANNEL]
+# ============================================================
+# Remove the hardware reference channel BEFORE filtering / CMR
+# ============================================================
 
-print(f"Reference CSC/site channel: {REFERENCE_CSC_CHANNEL}")
-print(f"Converted reference AD channel: {REFERENCE_AD_CHANNEL}")
+if REFERENCE_SITE not in site_to_ad:
+    raise ValueError(f"REFERENCE_SITE {REFERENCE_SITE} is not in site_to_ad map")
 
-site_order_tip_to_base = list(range(32, 0, -1))
+REFERENCE_AD_CHANNEL = site_to_ad[REFERENCE_SITE]
+
+print(f"Removing reference physical site: {REFERENCE_SITE}")
+print(f"Removing reference AD channel: {REFERENCE_AD_CHANNEL}")
+
+# Keep all physical sites except the reference site
+site_order_tip_to_base = [
+    site for site in range(32, 0, -1)
+    if site != REFERENCE_SITE
+]
+
 ad_order_tip_to_base = [site_to_ad[site] for site in site_order_tip_to_base]
 
-print("Site order tip to base:", site_order_tip_to_base)
-print("AD order tip to base:", ad_order_tip_to_base)
+print("Site order tip to base, reference removed:", site_order_tip_to_base)
+print("AD order tip to base, reference removed:", ad_order_tip_to_base)
 
 # Check channel id type first
 channel_ids = recording.get_channel_ids()
@@ -95,6 +107,49 @@ if isinstance(channel_ids[0], str):
     ad_order_tip_to_base_for_si = [str(ch) for ch in ad_order_tip_to_base]
 else:
     ad_order_tip_to_base_for_si = ad_order_tip_to_base
+
+# Safety check
+missing_channels = set(ad_order_tip_to_base_for_si) - set(channel_ids)
+if len(missing_channels) > 0:
+    raise ValueError(f"These channels are missing from recording: {missing_channels}")
+
+# Reorder channels according to physical probe order, excluding reference channel
+recording_ordered = recording.select_channels(ad_order_tip_to_base_for_si)
+
+print("Ordered channel IDs, reference removed:", recording_ordered.get_channel_ids())
+print("Number of channels after removing reference:", recording_ordered.get_num_channels())
+
+# Build probe geometry for only the remaining channels.
+# This preserves the real physical spacing, including the gap where the reference site was removed.
+contact_positions = np.array([
+    [0, (32 - site) * 50]   # site 32 at tip position, then 50 um spacing
+    for site in site_order_tip_to_base
+], dtype=float)
+
+probe = pi.Probe(ndim=2, si_units="um")
+probe.set_contacts(
+    positions=contact_positions,
+    shapes="circle",
+    shape_params={"radius": 6},
+)
+
+probe.set_device_channel_indices(range(len(site_order_tip_to_base)))
+
+recording_ordered = recording_ordered.set_probe(probe)
+
+print("Site order tip to base:", site_order_tip_to_base)
+print("AD order tip to base:", ad_order_tip_to_base)
+
+# # Check channel id type first
+# channel_ids = recording.get_channel_ids()
+# print("Original channel IDs:", channel_ids)
+# print("Channel ID type:", type(channel_ids[0]))
+
+# # Convert AD order to the same type as recording channel IDs
+# if isinstance(channel_ids[0], str):
+#     ad_order_tip_to_base_for_si = [str(ch) for ch in ad_order_tip_to_base]
+# else:
+#     ad_order_tip_to_base_for_si = ad_order_tip_to_base
 
 # # Reorder channels according to physical probe order
 # recording_ordered = recording.select_channels(ad_order_tip_to_base_for_si)
@@ -110,72 +165,8 @@ else:
 
 # recording_ordered = recording_ordered.set_probe(probe)
 
-# Reorder channels according to physical probe order: tip -> base
-recording_ordered_32 = recording.select_channels(ad_order_tip_to_base_for_si)
-
-ordered_ids_32 = list(recording_ordered_32.get_channel_ids())
-
-print("Ordered 32-channel IDs:", ordered_ids_32)
-
-# Convert reference channel id to the same type as SpikeInterface channel IDs
-if isinstance(ordered_ids_32[0], str):
-    reference_channel_id = str(REFERENCE_AD_CHANNEL)
-else:
-    reference_channel_id = REFERENCE_AD_CHANNEL
-
-if reference_channel_id not in ordered_ids_32:
-    raise ValueError(
-        f"Reference channel {reference_channel_id} not found in ordered channel IDs. "
-        f"Available IDs: {ordered_ids_32}"
-    )
-
-# Find where the reference channel sits in the ordered physical probe
-reference_position = ordered_ids_32.index(reference_channel_id)
-
-print(f"Reference channel ID: {reference_channel_id}")
-print(f"Reference position in ordered probe: {reference_position}")
-
-# Original 32-site geometry.
-# Do NOT regenerate a compressed 31-channel probe after deleting reference.
-locations_32 = np.column_stack([
-    np.zeros(32),              # x coordinate
-    np.arange(32) * 50.0       # y coordinate, tip -> base, 50 um spacing
-])
-
-# Keep all channels except the reference channel
-keep_ids = [
-    ch for ch in ordered_ids_32
-    if ch != reference_channel_id
-]
-
-keep_positions = [
-    i for i, ch in enumerate(ordered_ids_32)
-    if ch != reference_channel_id
-]
-
-recording_ordered = recording_ordered_32.select_channels(keep_ids)
-
-# Keep the real original locations, including the physical gap
-locations_31 = locations_32[keep_positions]
-
-print("Kept 31-channel IDs:", list(recording_ordered.get_channel_ids()))
-print("Kept channel locations:")
-print(locations_31)
-
-# Build a 31-contact probe using the original 32-site coordinates minus reference
-probe = pi.Probe(ndim=2, si_units="um")
-probe.set_contacts(
-    positions=locations_31,
-    shapes="circle",
-    shape_params={"radius": 5},
-)
-
-probe.set_device_channel_indices(np.arange(len(keep_ids)))
-
-recording_ordered = recording_ordered.set_probe(probe)
-
-print("Channel locations:")
-print(recording_ordered.get_channel_locations())
+# #print("Channel locations:")
+# #print(recording_ordered.get_channel_locations())
 
 recording_f = si.bandpass_filter(
     recording_ordered,
