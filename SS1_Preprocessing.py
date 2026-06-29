@@ -8,7 +8,7 @@ from spikeinterface.core import BinaryFolderRecording
 print("Loading...")
 
 bird = "TG964"
-date = "split_experiments/experiment_1"
+date = "split_experiments/experiment_2"
 
 folder = RAW_DATA / bird / date 
 

@@ -100,6 +100,14 @@ def export_one_sorter_to_phy(sorter_name, recording):
         metric_names=QUALITY_METRIC_NAMES,
     )
 
+    # analyzer.compute(
+    #     "principal_components",
+    #     # n_components=5,
+    #     # mode="by_channel_local",
+    #     n_jobs=4,
+    #     chunk_duration="30s",
+    # )
+
     metrics = analyzer.get_extension("quality_metrics").get_data()
 
     metrics_out = metrics.copy()
