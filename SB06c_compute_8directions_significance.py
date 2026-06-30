@@ -129,6 +129,121 @@ def direction_permutation_test(values, directions, n_perm=N_PERMUTATIONS, seed=R
     return obs_f, p_value
 
 
+def speed_permutation_test(values, speeds, n_perm=N_PERMUTATIONS, seed=RANDOM_SEED):
+    """
+    Test whether responses differ across speed labels.
+
+    Use case:
+        unit × direction level
+
+    Example:
+        For one unit and one direction, test whether moving_minus_baseline
+        differs among speed_1, speed_4, speed_16, speed_64, speed_128, speed_256.
+
+    Null:
+        response values are exchangeable across speed labels.
+    """
+    values = np.asarray(values, dtype=float)
+    speeds = np.asarray(speeds)
+
+    ok = ~np.isnan(values) & ~pd.isna(speeds)
+    values = values[ok]
+    speeds = speeds[ok]
+
+    if len(np.unique(speeds)) < 2:
+        return np.nan, np.nan
+
+    obs_f = one_way_f_stat(values, speeds)
+
+    if np.isnan(obs_f):
+        return np.nan, np.nan
+
+    rng = np.random.default_rng(seed)
+
+    null_f = []
+
+    for _ in range(n_perm):
+        shuffled_speeds = rng.permutation(speeds)
+        null_f.append(one_way_f_stat(values, shuffled_speeds))
+
+    null_f = np.asarray(null_f)
+    null_f = null_f[~np.isnan(null_f)]
+
+    if len(null_f) == 0:
+        return obs_f, np.nan
+
+    p_value = (np.sum(null_f >= obs_f) + 1) / (len(null_f) + 1)
+
+    return obs_f, p_value
+
+
+def speed_permutation_test_blocked_by_direction(
+    values,
+    speeds,
+    directions,
+    n_perm=N_PERMUTATIONS,
+    seed=RANDOM_SEED,
+):
+    """
+    Test whether responses differ across speeds while preserving direction structure.
+
+    Use case:
+        unit level
+
+    Why blocked by direction:
+        A neuron may have strong direction tuning. If we simply shuffle all speed labels
+        across all trials, direction tuning can contaminate the speed test.
+        Therefore, speed labels are shuffled only within each direction.
+
+    Null:
+        within each direction, response values are exchangeable across speed labels.
+    """
+    df = pd.DataFrame(
+        {
+            "value": values,
+            "speed": speeds,
+            "direction": directions,
+        }
+    ).dropna(subset=["value", "speed", "direction"])
+
+    if df["speed"].nunique() < 2:
+        return np.nan, np.nan
+
+    obs_f = one_way_f_stat(df["value"].values, df["speed"].values)
+
+    if np.isnan(obs_f):
+        return np.nan, np.nan
+
+    rng = np.random.default_rng(seed)
+
+    null_f = []
+
+    for _ in range(n_perm):
+        shuffled = df.copy()
+
+        for direction, idx in shuffled.groupby("direction").groups.items():
+            shuffled.loc[idx, "speed"] = rng.permutation(
+                shuffled.loc[idx, "speed"].values
+            )
+
+        null_f.append(
+            one_way_f_stat(
+                shuffled["value"].values,
+                shuffled["speed"].values,
+            )
+        )
+
+    null_f = np.asarray(null_f)
+    null_f = null_f[~np.isnan(null_f)]
+
+    if len(null_f) == 0:
+        return obs_f, np.nan
+
+    p_value = (np.sum(null_f >= obs_f) + 1) / (len(null_f) + 1)
+
+    return obs_f, p_value
+
+
 def bh_fdr(p_values):
     """Benjamini-Hochberg FDR correction."""
     p_values = np.asarray(p_values, dtype=float)
@@ -174,6 +289,8 @@ def main():
 
     rows = []
     direction_rows = []
+    speed_rows = []
+    direction_speed_rows = []
 
     for (unit_id, speed), df in unit_trial.groupby(["unit_id", "speed"], dropna=False):
         motion_response = df["moving_minus_baseline"]
@@ -221,8 +338,62 @@ def main():
                 }
             )
 
+        # -----------------------------
+    
+    # Speed-effect tests
+    # -----------------------------
+    # These tests ask whether moving_minus_baseline differs across speeds.
+    #
+    # 1. unit-level speed effect:
+    #       unit_id only
+    #       speed labels are shuffled within each direction
+    #
+    # 2. unit × direction speed effect:
+    #       unit_id × direction
+    #       speed labels are shuffled within that direction
+
+    for unit_id, df_unit in unit_trial.groupby("unit_id", dropna=False):
+
+        speed_f, p_speed = speed_permutation_test_blocked_by_direction(
+            values=df_unit["moving_minus_baseline"],
+            speeds=df_unit["speed"],
+            directions=df_unit["direction"],
+        )
+
+        speed_rows.append(
+            {
+                "unit_id": unit_id,
+                "n_trials": df_unit["trial_id"].nunique(),
+                "n_speeds": df_unit["speed"].nunique(),
+                "n_directions": df_unit["direction"].nunique(),
+                "speed_f_stat_motion_baseline": speed_f,
+                "p_speed_effect_motion_baseline": p_speed,
+            }
+        )
+
+        for direction, df_dir in df_unit.groupby("direction", dropna=False):
+
+            speed_f_dir, p_speed_dir = speed_permutation_test(
+                values=df_dir["moving_minus_baseline"],
+                speeds=df_dir["speed"],
+            )
+
+            direction_speed_rows.append(
+                {
+                    "unit_id": unit_id,
+                    "direction": direction,
+                    "n_trials": df_dir["trial_id"].nunique(),
+                    "n_speeds": df_dir["speed"].nunique(),
+                    "speed_f_stat_motion_baseline": speed_f_dir,
+                    "p_speed_effect_motion_baseline": p_speed_dir,
+                }
+            )
+
     sig = pd.DataFrame(rows)
     dir_sig = pd.DataFrame(direction_rows)
+
+    speed_sig = pd.DataFrame(speed_rows)
+    dir_speed_sig = pd.DataFrame(direction_speed_rows)
 
     # -----------------------------
     # FDR correction
@@ -259,6 +430,29 @@ def main():
         & (dir_sig["mean_moving_minus_baseline"] < 0)
     )
 
+    # -----------------------------
+    # FDR correction for speed-effect tests
+    # -----------------------------
+    # Unit-level speed effect:
+    # correction is across units.
+    speed_sig["q_speed_effect_motion_baseline"] = bh_fdr(
+        speed_sig["p_speed_effect_motion_baseline"]
+    )
+
+    speed_sig["is_speed_modulated_motion_baseline"] = (
+        speed_sig["q_speed_effect_motion_baseline"] < ALPHA
+    )
+
+    # Unit × direction speed effect:
+    # correction is across all unit-direction rows.
+    dir_speed_sig["q_speed_effect_motion_baseline"] = bh_fdr(
+        dir_speed_sig["p_speed_effect_motion_baseline"]
+    )
+
+    dir_speed_sig["is_speed_modulated_direction"] = (
+        dir_speed_sig["q_speed_effect_motion_baseline"] < ALPHA
+    )
+
     # Merge speed-specific tuning metrics from SB05.
     merge_cols = ["unit_id", "speed"]
     if not all(c in unit_tuning.columns for c in merge_cols):
@@ -273,8 +467,14 @@ def main():
     unit_sig_path = ANALYSIS_OUTPUT_DIR / "unit_significance_summary.csv"
     dir_sig_path = ANALYSIS_OUTPUT_DIR / "unit_direction_significance.csv"
 
+    speed_sig_path = ANALYSIS_OUTPUT_DIR / "unit_speed_effect_summary.csv"
+    dir_speed_sig_path = ANALYSIS_OUTPUT_DIR / "unit_direction_speed_effect.csv"
+
     sig.to_csv(unit_sig_path, index=False)
     dir_sig.to_csv(dir_sig_path, index=False)
+
+    speed_sig.to_csv(speed_sig_path, index=False)
+    dir_speed_sig.to_csv(dir_speed_sig_path, index=False)
 
     print("\n===== Saved =====")
     print(unit_sig_path)

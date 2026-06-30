@@ -8,7 +8,7 @@ from spikeinterface.core import BinaryFolderRecording
 print("Loading...")
 
 bird = "TG964"
-date = "split_experiments/experiment_2"
+date = "split_experiments/experiment_3"
 
 folder = RAW_DATA / bird / date 
 
@@ -18,7 +18,7 @@ folder = RAW_DATA / bird / date
 recording = BinaryFolderRecording(folder)
 
 # If the reference was physical site 2, then site_to_ad says AD channel = 16.
-REFERENCE_SITE = 10   # <-- CHANGE THIS to your actual reference site
+REFERENCE_SITE = 5  # <-- CHANGE THIS to your actual reference site
 
 info_lines = []
 

@@ -21,6 +21,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from SB0_config_analysis import ANALYSIS_OUTPUT_DIR
 
+# Things need to be changed:
+# def format_polar_axis(ax, title):
+# def speed_to_numeric
+# def get_speed_order_available
+# def plot_cross_speed_summary_page
+# def plot_speed_raster_psth_page
+
 
 # =====================
 # Plot settings
@@ -34,7 +41,7 @@ SIGNIFICANCE_COLUMNS = [
     "is_direction_tuned_motion_baseline",
 ]
 
-TIME_RANGE = (-3.0, 5.0)
+TIME_RANGE = (-2.0, 4.0)
 BIN_WIDTH = 0.1
 PSTH_DIRECTION_N_COLS = 4
 
@@ -87,12 +94,165 @@ def close_polar(theta, r):
     return np.r_[theta, theta[0]], np.r_[r, r[0]]
 
 
+# def format_polar_axis(ax, title):
+#     ax.set_theta_zero_location("E")
+#     ax.set_theta_direction(-1)
+#     ax.set_xticks(np.deg2rad([0, 45, 90, 135, 180, 225, 270, 315]))
+#     ax.set_xticklabels(["0", "45", "90", "135", "180", "225", "270", "315"])
+#     ax.set_title(title)
+
+
 def format_polar_axis(ax, title):
     ax.set_theta_zero_location("E")
     ax.set_theta_direction(-1)
-    ax.set_xticks(np.deg2rad([0, 45, 90, 135, 180, 225, 270, 315]))
-    ax.set_xticklabels(["0", "45", "90", "135", "180", "225", "270", "315"])
+    ax.set_xticks(np.deg2rad([0, 90, 180, 270]))
+    ax.set_xticklabels(["0", "90", "180", "270"])
     ax.set_title(title)
+
+
+def speed_to_numeric(speed):
+    if pd.isna(speed):
+        return np.nan
+
+    try:
+        return float(speed)
+    except Exception:
+        pass
+
+    s = str(speed)
+    s = s.replace("speed_", "").replace("_dps", "")
+
+    try:
+        return float(s)
+    except Exception:
+        return np.nan
+
+
+def get_speed_order_available(df):
+    speeds = pd.Series(df["speed"]).dropna().astype(str).unique().tolist()
+    return sorted(speeds, key=lambda x: speed_to_numeric(x))
+
+
+def plot_cross_speed_summary_page(
+    pdf,
+    unit_id,
+    trial_unit,
+    condition_unit,
+    tuning_summary,
+    sig,
+    dir_sig,
+    speed_effect_unit=None,
+):
+    speeds = get_speed_order_available(condition_unit)
+
+    fig = plt.figure(figsize=(24, 12))
+    gs = fig.add_gridspec(
+        3,
+        len(speeds),
+        height_ratios=[1.0, 1.05, 1.25],
+        hspace=0.45,
+        wspace=0.45,
+    )
+
+    for col, speed in enumerate(speeds):
+        labeled_dummy = None
+
+        trial_speed = trial_unit[
+            trial_unit["speed"].astype(str) == str(speed)
+        ].copy()
+
+        condition_speed = condition_unit[
+            condition_unit["speed"].astype(str) == str(speed)
+        ].copy()
+
+        tuning_row = filter_unit_speed(tuning_summary, unit_id, speed)
+
+        sig_row = (
+            filter_unit_speed(sig, unit_id, speed)
+            if sig is not None
+            else None
+        )
+
+        dir_sig_speed = (
+            filter_unit_speed(dir_sig, unit_id, speed)
+            if dir_sig is not None
+            else None
+        )
+
+        ax_resp = fig.add_subplot(gs[0, col])
+        plot_signed_motion_baseline_response(
+            ax_resp,
+            trial_speed,
+            dir_sig_speed,
+        )
+        ax_resp.set_title(f"{speed}\nresponse")
+
+        ax_polar = fig.add_subplot(gs[1, col], projection="polar")
+        plot_baseline_static_moving_polar(
+            ax_polar,
+            condition_speed,
+        )
+        ax_polar.set_title(f"{speed}\nbaseline/static/moving")
+
+        ax_text = fig.add_subplot(gs[2, col])
+        add_summary_text(
+            ax_text,
+            unit_id,
+            speed,
+            tuning_row,
+            sig_row,
+            dir_sig_speed,
+        )
+
+    fig.suptitle(
+        f"Unit {unit_id} cross-speed comparison",
+        fontsize=16,
+    )
+
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
+def plot_speed_raster_psth_page(
+    pdf,
+    unit_id,
+    speed,
+    labeled_speed,
+    directions,
+):
+    fig = plt.figure(figsize=(16, 11))
+    gs = fig.add_gridspec(
+        2,
+        1,
+        height_ratios=[1.1, 1.2],
+        hspace=0.4,
+    )
+
+    ax_raster = fig.add_subplot(gs[0, 0])
+    plot_raster_by_speed(
+        ax_raster,
+        labeled_speed,
+        directions,
+        speed,
+    )
+
+    ax_psth = fig.add_subplot(gs[1, 0])
+    plot_psth_combined(
+        ax_psth,
+        labeled_speed,
+        directions,
+        speed,
+    )
+
+    fig.suptitle(
+        f"Unit {unit_id} raster + PSTH | speed = {speed}",
+        fontsize=14,
+    )
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    pdf.savefig(fig)
+    plt.close(fig)
 
 
 def ensure_speed_column(df, table_name):
@@ -458,7 +618,100 @@ def add_summary_text(ax, unit_id, speed_value, tuning_row, sig_row, dir_sig_spee
 # =====================
 
 
-def plot_one_unit(unit_id, labeled, trial_summary, condition_summary, tuning_summary, sig, dir_sig, out_dir):
+# def plot_one_unit(unit_id, labeled, trial_summary, condition_summary, tuning_summary, sig, dir_sig, out_dir):
+#     labeled_unit = labeled[labeled["unit_id"] == unit_id].copy()
+#     trial_unit = trial_summary[trial_summary["unit_id"] == unit_id].copy()
+#     condition_unit = condition_summary[condition_summary["unit_id"] == unit_id].copy()
+
+#     if labeled_unit.empty or trial_unit.empty or condition_unit.empty:
+#         print(f"Skipping unit {unit_id}: missing labeled/trial/condition data.")
+#         return
+
+#     speeds = sorted_unique_nonnull(condition_unit["speed"])
+#     if len(speeds) == 0:
+#         print(f"Skipping unit {unit_id}: no speed values found.")
+#         return
+
+#     out_path = out_dir / f"unit_{unit_id}_single_screen_speed_split_summary.pdf"
+
+#     with PdfPages(out_path) as pdf:
+#         for speed in speeds:
+#             labeled_speed = labeled_unit[labeled_unit["speed"] == speed].copy() if "speed" in labeled_unit.columns else labeled_unit.copy()
+#             trial_speed = trial_unit[trial_unit["speed"] == speed].copy()
+#             condition_speed = condition_unit[condition_unit["speed"] == speed].copy()
+#             tuning_row = filter_unit_speed(tuning_summary, unit_id, speed)
+#             sig_row = filter_unit_speed(sig, unit_id, speed) if sig is not None else None
+#             dir_sig_speed = filter_unit_speed(dir_sig, unit_id, speed) if dir_sig is not None else None
+
+#             directions = sorted_unique_nonnull(condition_speed["direction"])
+#             if len(directions) == 0:
+#                 continue
+
+#             # Page A: raster for this speed.
+#             fig1, ax1 = plt.subplots(figsize=(12, 8))
+#             plot_raster_by_speed(ax1, labeled_speed, directions, speed)
+#             fig1.suptitle(f"Unit {unit_id} raster | speed = {speed}", fontsize=14)
+#             fig1.tight_layout(rect=[0, 0, 1, 0.96])
+#             pdf.savefig(fig1)
+#             plt.close(fig1)
+
+#             # Page B: PSTH for this speed.
+#             fig2 = plt.figure(figsize=(18, 10))
+#             gs2 = fig2.add_gridspec(2, 5)
+#             ax_combined = fig2.add_subplot(gs2[:, 0])
+#             plot_psth_combined(ax_combined, labeled_speed, directions, speed)
+#             plot_psth_separated(fig2, gs2[:, 1:], labeled_speed, directions)
+#             fig2.suptitle(f"Unit {unit_id} PSTH | speed = {speed}", fontsize=14)
+#             fig2.tight_layout(rect=[0, 0, 1, 0.96])
+#             pdf.savefig(fig2)
+#             plt.close(fig2)
+
+#             # Page C: response and polar summaries for this speed.
+#             fig3 = plt.figure(figsize=(19, 11))
+#             gs3 = fig3.add_gridspec(
+#                 2, 4,
+#                 width_ratios=[1.2, 1.1, 1.1, 1.1],
+#                 height_ratios=[1.0, 1.05],
+#                 wspace=0.45,
+#                 hspace=0.35,
+#             )
+
+#             ax_signed = fig3.add_subplot(gs3[0, 0])
+#             plot_signed_motion_baseline_response(ax_signed, trial_speed, dir_sig_speed)
+
+#             ax_moving_polar = fig3.add_subplot(gs3[0, 1], projection="polar")
+#             plot_moving_fr_polar(ax_moving_polar, condition_speed)
+
+#             ax_components = fig3.add_subplot(gs3[0, 2], projection="polar")
+#             plot_signed_components_polar(ax_components, condition_speed, dir_sig_speed)
+
+#             ax_context = fig3.add_subplot(gs3[0, 3], projection="polar")
+#             plot_baseline_static_moving_polar(ax_context, condition_speed)
+
+#             ax_text = fig3.add_subplot(gs3[1, 0:2])
+#             add_summary_text(ax_text, unit_id, speed, tuning_row, sig_row, None)
+
+#             ax_dir_table = fig3.add_subplot(gs3[1, 2:4])
+#             add_direction_pq_table(ax_dir_table, dir_sig_speed)
+
+#             fig3.suptitle(f"Unit {unit_id} response summary | speed = {speed}", fontsize=14)
+#             fig3.tight_layout(rect=[0, 0, 1, 0.96])
+#             pdf.savefig(fig3)
+#             plt.close(fig3)
+
+#     print(f"Saved: {out_path}")
+
+
+def plot_one_unit(
+    unit_id,
+    labeled,
+    trial_summary,
+    condition_summary,
+    tuning_summary,
+    sig,
+    dir_sig,
+    out_dir,
+):
     labeled_unit = labeled[labeled["unit_id"] == unit_id].copy()
     trial_unit = trial_summary[trial_summary["unit_id"] == unit_id].copy()
     condition_unit = condition_summary[condition_summary["unit_id"] == unit_id].copy()
@@ -467,77 +720,49 @@ def plot_one_unit(unit_id, labeled, trial_summary, condition_summary, tuning_sum
         print(f"Skipping unit {unit_id}: missing labeled/trial/condition data.")
         return
 
-    speeds = sorted_unique_nonnull(condition_unit["speed"])
+    speeds = get_speed_order_available(condition_unit)
+
     if len(speeds) == 0:
         print(f"Skipping unit {unit_id}: no speed values found.")
         return
 
-    out_path = out_dir / f"unit_{unit_id}_single_screen_speed_split_summary.pdf"
+    out_path = out_dir / f"unit_{unit_id}_cross_speed_summary.pdf"
 
     with PdfPages(out_path) as pdf:
+
+        # Page 1: cross-speed comparison.
+        plot_cross_speed_summary_page(
+            pdf=pdf,
+            unit_id=unit_id,
+            trial_unit=trial_unit,
+            condition_unit=condition_unit,
+            tuning_summary=tuning_summary,
+            sig=sig,
+            dir_sig=dir_sig,
+        )
+
+        # Pages 2+: one raster/PSTH page per speed.
         for speed in speeds:
-            labeled_speed = labeled_unit[labeled_unit["speed"] == speed].copy() if "speed" in labeled_unit.columns else labeled_unit.copy()
-            trial_speed = trial_unit[trial_unit["speed"] == speed].copy()
-            condition_speed = condition_unit[condition_unit["speed"] == speed].copy()
-            tuning_row = filter_unit_speed(tuning_summary, unit_id, speed)
-            sig_row = filter_unit_speed(sig, unit_id, speed) if sig is not None else None
-            dir_sig_speed = filter_unit_speed(dir_sig, unit_id, speed) if dir_sig is not None else None
+            labeled_speed = labeled_unit[
+                labeled_unit["speed"].astype(str) == str(speed)
+            ].copy()
+
+            condition_speed = condition_unit[
+                condition_unit["speed"].astype(str) == str(speed)
+            ].copy()
 
             directions = sorted_unique_nonnull(condition_speed["direction"])
+
             if len(directions) == 0:
                 continue
 
-            # Page A: raster for this speed.
-            fig1, ax1 = plt.subplots(figsize=(12, 8))
-            plot_raster_by_speed(ax1, labeled_speed, directions, speed)
-            fig1.suptitle(f"Unit {unit_id} raster | speed = {speed}", fontsize=14)
-            fig1.tight_layout(rect=[0, 0, 1, 0.96])
-            pdf.savefig(fig1)
-            plt.close(fig1)
-
-            # Page B: PSTH for this speed.
-            fig2 = plt.figure(figsize=(18, 10))
-            gs2 = fig2.add_gridspec(2, 5)
-            ax_combined = fig2.add_subplot(gs2[:, 0])
-            plot_psth_combined(ax_combined, labeled_speed, directions, speed)
-            plot_psth_separated(fig2, gs2[:, 1:], labeled_speed, directions)
-            fig2.suptitle(f"Unit {unit_id} PSTH | speed = {speed}", fontsize=14)
-            fig2.tight_layout(rect=[0, 0, 1, 0.96])
-            pdf.savefig(fig2)
-            plt.close(fig2)
-
-            # Page C: response and polar summaries for this speed.
-            fig3 = plt.figure(figsize=(19, 11))
-            gs3 = fig3.add_gridspec(
-                2, 4,
-                width_ratios=[1.2, 1.1, 1.1, 1.1],
-                height_ratios=[1.0, 1.05],
-                wspace=0.45,
-                hspace=0.35,
+            plot_speed_raster_psth_page(
+                pdf=pdf,
+                unit_id=unit_id,
+                speed=speed,
+                labeled_speed=labeled_speed,
+                directions=directions,
             )
-
-            ax_signed = fig3.add_subplot(gs3[0, 0])
-            plot_signed_motion_baseline_response(ax_signed, trial_speed, dir_sig_speed)
-
-            ax_moving_polar = fig3.add_subplot(gs3[0, 1], projection="polar")
-            plot_moving_fr_polar(ax_moving_polar, condition_speed)
-
-            ax_components = fig3.add_subplot(gs3[0, 2], projection="polar")
-            plot_signed_components_polar(ax_components, condition_speed, dir_sig_speed)
-
-            ax_context = fig3.add_subplot(gs3[0, 3], projection="polar")
-            plot_baseline_static_moving_polar(ax_context, condition_speed)
-
-            ax_text = fig3.add_subplot(gs3[1, 0:2])
-            add_summary_text(ax_text, unit_id, speed, tuning_row, sig_row, None)
-
-            ax_dir_table = fig3.add_subplot(gs3[1, 2:4])
-            add_direction_pq_table(ax_dir_table, dir_sig_speed)
-
-            fig3.suptitle(f"Unit {unit_id} response summary | speed = {speed}", fontsize=14)
-            fig3.tight_layout(rect=[0, 0, 1, 0.96])
-            pdf.savefig(fig3)
-            plt.close(fig3)
 
     print(f"Saved: {out_path}")
 

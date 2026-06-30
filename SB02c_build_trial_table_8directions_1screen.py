@@ -152,7 +152,9 @@ def main():
                     # Speed information
                     "speed": row_moving["Speed_label"],
                     "speed_label": row_moving["Speed_label"],
-                    "speed_deg_per_sec": row_moving["Speed_deg_per_sec"],
+                    # Check stim_log about this
+                    # "speed_deg_per_sec": row_moving["Speed_deg_per_sec"],
+                    "speed_deg_per_sec": row_moving["Nominal_speed_deg_per_sec"],
                     "tf_hz": row_moving["GratingStim_TF_Hz"],
                     "sf_cpd": row_moving["GratingStim_SF_cpd"],
 

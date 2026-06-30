@@ -284,6 +284,11 @@ def main():
         -unit_condition_summary["moving_minus_baseline"].clip(upper=0)
     )
 
+    unit_condition_summary = unit_condition_summary.sort_values(
+        ["unit_id", "speed_deg_per_sec", "direction"]
+    ).reset_index(drop=True)
+
+
     # -----------------------------
     # Unit × speed tuning summary
     # -----------------------------
