@@ -20,15 +20,15 @@ import sys
 #     "SB06b_compute_12patterns_significance.py",
 # ]
 
-scripts = [
-    # "SB01_extract_events_dedup.py",
-    "SB01_extract_events_for_cut_test.py",
-    "SB02c_build_trial_table_8directions_1screen.py",
-    "SB03_export_curated_spikes.py",
-    "SB04c_label_spikes_8directions_1screen.py",
-    "SB05c_compute_8directions_summary.py",
-    "SB06c_compute_8directions_significance.py",
-]
+# scripts = [
+#     # "SB01_extract_events_dedup.py",
+#     "SB01_extract_events_for_cut_test.py",
+#     "SB02c_build_trial_table_8directions_1screen.py",
+#     "SB03_export_curated_spikes.py",
+#     "SB04c_label_spikes_8directions_1screen.py",
+#     "SB05c_compute_8directions_summary.py",
+#     "SB06c_compute_8directions_significance.py",
+# ]
 
 # scripts = [
 #     "SB01a_extract_events_concatenated.py",
@@ -38,6 +38,16 @@ scripts = [
 #     "SB05a1_compute_8directions_summary.py",
 #     "SB06a1_compute_8directions_significance.py",
 # ]
+
+scripts = [
+    "SB01NP_extract_events.py",
+    "SB02NP_build_trial_table.py",
+    "SB03NP_export_curated_spikes.py",
+    "SB04NP_label_spikes.py",
+    "SB05NP_compute_tuning_summary.py",
+    "SB06NP_compute_significance.py",
+]
+
 
 for script in scripts:
     print(f"\n===== Running {script} =====")

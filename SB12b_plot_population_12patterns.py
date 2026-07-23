@@ -1,5 +1,3 @@
-# SB07_plot_population_12patterns.py
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
