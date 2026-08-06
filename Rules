@@ -42,6 +42,7 @@ git push origin main
 
 
 
-# phy template-gui  C:\Lab\Processing\results_2\params.py --clear-cache
-# phy template-gui  C:\Lab\Processing\TG963_site1-2\params.py
 # phy template-gui params.py
+
+# marimo edit SB13NP_marimo_pattern_explorer.py
+# marimo run SB13NP_marimo_pattern_explorer.py

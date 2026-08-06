@@ -7,9 +7,14 @@ import sys
 #     "SB12_plot_population.py",
 # ]
 
+# scripts = [
+#     "SB11b_plot_units_12patterns.py",
+#     #"SB12_plot_population.py",
+# ]
+
 scripts = [
-    "SB11b_plot_units_12patterns.py",
-    #"SB12_plot_population.py",
+    "SB11NP_plot_units_8directions.py",
+    "SB11NP_plot_units_12patterns.py",
 ]
 
 for script in scripts:

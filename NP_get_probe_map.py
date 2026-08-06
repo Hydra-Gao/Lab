@@ -3,7 +3,7 @@ import numpy as np
 import spikeinterface.full as si
 from kilosort.io import save_probe
 
-data_folder = Path(r"D:\Lab\Raw_data\TG963_Cb\Cb_2026_07_14_site2_1_g0\Cb_2026_07_14_site2_1_g0_imec0")
+data_folder = Path(r"D:\Lab\Raw_data\TG963_Cb\Cb_2026_07_14_1site_3_g0\Cb_2026_07_14_1site_3_g0_imec0")
 
 recording = si.read_spikeglx(
     data_folder,
@@ -36,7 +36,7 @@ ks_probe = {
 
 save_probe(
     ks_probe,
-    r"D:\Lab\Raw_data\TG963_Cb\Cb_2026_07_14_site2_1_g0\Cb_2026_07_14_site2_1_g0_imec0\probe_from_meta.json"
+    r"D:\Lab\Raw_data\TG963_Cb\Cb_2026_07_14_1site_3_g0\Cb_2026_07_14_1site_3_g0_imec0\probe_from_meta.json"
 )
 
 print("Saved Kilosort probe file.")

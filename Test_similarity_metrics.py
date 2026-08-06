@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-npy_path = r"C:\Lab\Processing\TG963_site1-2\similar_templates.npy"
-csv_path = r"C:\Lab\Processing\TG963_site1-2\similar_templates.csv"
+npy_path = r"C:\Lab\Processing\TG963_site1-3\similar_templates.npy"
+csv_path = r"C:\Lab\Processing\TG963_site1-3\similar_templates.csv"
 
 data = np.load(npy_path)
 

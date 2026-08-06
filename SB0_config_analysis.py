@@ -1,13 +1,13 @@
 from pathlib import Path
 
 BIRD = "TG963"
-SESSION = "site1-2"
+SESSION = "site2-1"
 SORTER_NAME = "kilosort4" 
 WORKING_DIR = Path(fr"C:\Lab\Processing\{BIRD}_{SESSION}")
 OUTPUT_DIR = Path(fr"C:\Lab\Processing\{BIRD}_{SESSION}\Output_dir_almost")
 
-SPIKEGLX_BIN_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_1site_2_g0_t0.imec0.ap.bin"
-SPIKEGLX_META_PATH = None
+SPIKEGLX_BIN_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_site2_1_g0_t0.imec0.ap.bin"
+SPIKEGLX_META_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_site2_1_g0_t0.imec0.ap.meta"
 
 # which channel in the SpikeGLX .ap.bin file contains the digital word (TTL) information.
 DIGITAL_WORD_CHANNEL_INDEX = -1
@@ -17,7 +17,7 @@ MIN_EVENT_INTERVAL_SEC = 0.001
 
 # STIMLOG_PATH = Path(r"G:\Lab\Raw_data\TG964\stimulus_logs\2026-06-24_TG964_VbC_7speeds_4directions_site2_L_2026_06_24_front_single_screen_4directions_7speeds_0x35d8.csv")
 # STIMLOG_PATH = Path(r"E:\Lab\Data\stimulus_log\2026-04-27_TG884_19.02_1st_spatemp_0xf12d.csv")
-STIMLOG_PATH = Path(r"C:\Lab\Raw_data\TG963\stimulus_logs\2026-07-14_TG963_VbC_site1_1_L_2026_07_14_VbC_combined_front_optimal_ipsi_contra_8rep_0x2de4.csv")
+STIMLOG_PATH = Path(r"C:\Lab\Raw_data\TG963\stimulus_logs\2026-07-14_TG963_VbC_site2_1_M_2026_07_14_VbC_combined_front_optimal_ipsi_contra_8rep_001.csv")
 
 CURATED_SORTING_FOLDER = WORKING_DIR
 PHY_FOLDER = WORKING_DIR 
@@ -53,7 +53,7 @@ SAMPLING_FREQUENCY = 30000.0
 # EXPECTED_MOTION_TTL_COUNT = 288
 
 # TG964(VbC_speed): 4 directions × 8 or 6 replicates × 6 speed = 192 or 144 moving epochs.
-EXPECTED_MOTION_TTL_COUNT = 144
+EXPECTED_MOTION_TTL_COUNT = 288
 
 
 # -------------------------------

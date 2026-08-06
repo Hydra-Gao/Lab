@@ -40,7 +40,7 @@ import sys
 # ]
 
 scripts = [
-    "SB01NP_extract_events.py",
+    "SB01NP_extract_event.py",
     "SB02NP_build_trial_table.py",
     "SB03NP_export_curated_spikes.py",
     "SB04NP_label_spikes.py",
