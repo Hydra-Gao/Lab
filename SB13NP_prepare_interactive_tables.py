@@ -36,7 +36,7 @@ from scipy.io import loadmat
 # USER SETTINGS
 # =============================================================================
 
-OUTPUT_DIR = Path(r"C:\Lab\Processing\TG963_site1_population\interactive_tables")
+OUTPUT_DIR = Path(r"C:\Lab\Processing\TG963_site2_population\interactive_tables")
 
 # One entry per recording/source. source_name must be identical for the
 # corresponding 12-pattern and 8-direction datasets so a selected unit can be
@@ -69,65 +69,109 @@ OUTPUT_DIR = Path(r"C:\Lab\Processing\TG963_site1_population\interactive_tables"
 # supplied per source when that file lives elsewhere.
 SOURCE_SPECS = [
     {
-        "source_name": "site1_1",
+        "source_name": "site2_1",
         "pattern_significance_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-1\Output_dir_almost\analysis_TG963_site1-1_kilosort4\unit_pattern_significance.csv"
+            r"C:\Lab\Processing\TG963_site2-1\Output_dir_almost\analysis_TG963_site2-1_kilosort4\unit_pattern_significance.csv"
         ),
         "pattern_summary_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-1\Output_dir_almost\analysis_TG963_site1-1_kilosort4\unit_pattern_summary.csv"
+            r"C:\Lab\Processing\TG963_site2-1\Output_dir_almost\analysis_TG963_site2-1_kilosort4\unit_pattern_summary.csv"
         ),
         "curated_units_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-1\Output_dir_almost\analysis_TG963_site1-1_kilosort4\curated_units.csv"
+            r"C:\Lab\Processing\TG963_site2-1\Output_dir_almost\analysis_TG963_site2-1_kilosort4\curated_units.csv"
         ),
         "chanmap_files": [
             Path(
-                r"C:\Lab\Processing\TG963_site1-1\Cb_2026_07_14_1site_1_correct_g0_t0.imec0.ap_kilosortChanMap.mat"
+                r"C:\Lab\Processing\TG963_site2-1\Cb_2026_07_14_site2_1_g0_t0.imec0.ap_kilosortChanMap.mat"
             )
         ],
-        "curated_to_chanmap_shank": {4: 4},
-
+        "curated_to_chanmap_shank": {0: 3, 1: 4},
+    
         # None = automatically use pattern_significance_csv.parent.
         # Set a separate folder here only when 8-direction outputs live elsewhere.
         "direction_analysis_dir": None,
     },
     {
-        "source_name": "site1_2",
+        "source_name": "site2_2",
         "pattern_significance_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-2\Output_dir_almost\analysis_TG963_site1-2_kilosort4\unit_pattern_significance.csv"
+            r"C:\Lab\Processing\TG963_site2-2\Output_dir_almost\analysis_TG963_site2-2_kilosort4\unit_pattern_significance.csv"
         ),
         "pattern_summary_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-2\Output_dir_almost\analysis_TG963_site1-2_kilosort4\unit_pattern_summary.csv"
+            r"C:\Lab\Processing\TG963_site2-2\Output_dir_almost\analysis_TG963_site2-2_kilosort4\unit_pattern_summary.csv"
         ),
         "curated_units_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-2\Output_dir_almost\analysis_TG963_site1-2_kilosort4\curated_units.csv"
+            r"C:\Lab\Processing\TG963_site2-2\Output_dir_almost\analysis_TG963_site2-2_kilosort4\curated_units.csv"
         ),
         "chanmap_files": [
             Path(
-                r"C:\Lab\Processing\TG963_site1-2\Cb_2026_07_14_1site_2_g0_t0.imec0.ap_kilosortChanMap.mat"
+                r"C:\Lab\Processing\TG963_site2-2\Cb_2026_07_14_site2_2_g0_t0.imec0.ap_kilosortChanMap.mat"
             )
         ],
-        "curated_to_chanmap_shank": {0: 1, 1: 2},
+        "curated_to_chanmap_shank": {1: 1, 2: 2},
+    
+        # None = automatically use pattern_significance_csv.parent.
+        # Set a separate folder here only when 8-direction outputs live elsewhere.
         "direction_analysis_dir": None,
     },
-    {
-        "source_name": "site1_3",
-        "pattern_significance_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-3\Output_dir_almost\analysis_TG963_site1-3_kilosort4\unit_pattern_significance.csv"
-        ),
-        "pattern_summary_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-3\Output_dir_almost\analysis_TG963_site1-3_kilosort4\unit_pattern_summary.csv"
-        ),
-        "curated_units_csv": Path(
-            r"C:\Lab\Processing\TG963_site1-3\Output_dir_almost\analysis_TG963_site1-3_kilosort4\curated_units.csv"
-        ),
-        "chanmap_files": [
-            Path(
-                r"C:\Lab\Processing\TG963_site1-3\Cb_2026_07_14_1site_3_g0_t0.imec0.ap_kilosortChanMap.mat"
-            )
-        ],
-        "curated_to_chanmap_shank": {0: 3},
-        "direction_analysis_dir": None,
-    },
+    # {
+    #     "source_name": "site1_1",
+    #     "pattern_significance_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-1\Output_dir_almost\analysis_TG963_site1-1_kilosort4\unit_pattern_significance.csv"
+    #     ),
+    #     "pattern_summary_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-1\Output_dir_almost\analysis_TG963_site1-1_kilosort4\unit_pattern_summary.csv"
+    #     ),
+    #     "curated_units_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-1\Output_dir_almost\analysis_TG963_site1-1_kilosort4\curated_units.csv"
+    #     ),
+    #     "chanmap_files": [
+    #         Path(
+    #             r"C:\Lab\Processing\TG963_site1-1\Cb_2026_07_14_1site_1_correct_g0_t0.imec0.ap_kilosortChanMap.mat"
+    #         )
+    #     ],
+    #     "curated_to_chanmap_shank": {4: 4},
+
+    #     # None = automatically use pattern_significance_csv.parent.
+    #     # Set a separate folder here only when 8-direction outputs live elsewhere.
+    #     "direction_analysis_dir": None,
+    # },
+    # {
+    #     "source_name": "site1_2",
+    #     "pattern_significance_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-2\Output_dir_almost\analysis_TG963_site1-2_kilosort4\unit_pattern_significance.csv"
+    #     ),
+    #     "pattern_summary_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-2\Output_dir_almost\analysis_TG963_site1-2_kilosort4\unit_pattern_summary.csv"
+    #     ),
+    #     "curated_units_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-2\Output_dir_almost\analysis_TG963_site1-2_kilosort4\curated_units.csv"
+    #     ),
+    #     "chanmap_files": [
+    #         Path(
+    #             r"C:\Lab\Processing\TG963_site1-2\Cb_2026_07_14_1site_2_g0_t0.imec0.ap_kilosortChanMap.mat"
+    #         )
+    #     ],
+    #     "curated_to_chanmap_shank": {0: 1, 1: 2},
+    #     "direction_analysis_dir": None,
+    # },
+    # {
+    #     "source_name": "site1_3",
+    #     "pattern_significance_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-3\Output_dir_almost\analysis_TG963_site1-3_kilosort4\unit_pattern_significance.csv"
+    #     ),
+    #     "pattern_summary_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-3\Output_dir_almost\analysis_TG963_site1-3_kilosort4\unit_pattern_summary.csv"
+    #     ),
+    #     "curated_units_csv": Path(
+    #         r"C:\Lab\Processing\TG963_site1-3\Output_dir_almost\analysis_TG963_site1-3_kilosort4\curated_units.csv"
+    #     ),
+    #     "chanmap_files": [
+    #         Path(
+    #             r"C:\Lab\Processing\TG963_site1-3\Cb_2026_07_14_1site_3_g0_t0.imec0.ap_kilosortChanMap.mat"
+    #         )
+    #     ],
+    #     "curated_to_chanmap_shank": {0: 3},
+    #     "direction_analysis_dir": None,
+    # },
 ]
 
 PATTERN_ORDER = [
