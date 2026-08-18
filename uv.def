@@ -1,0 +1,5 @@
+Bootstrap: docker
+From: ghcr.io/astral-sh/uv:python3.11-trixie
+
+%post
+    uv pip install --system bombcell

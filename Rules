@@ -41,8 +41,11 @@ git push origin main
 # phy template-gui  G:\Lab\_analyzed\TG915\old_sorting\Section_2-1_no_common_reference\Output_dir_almost\phy_M12_kilosort4_curated\params.py
 
 
+# phy template-gui  C:\Lab\Processing\TG963_site1-2\params.py
 
 # phy template-gui params.py
+# phy template-gui params.py --clear-cache
+# phy template-gui params.py --clear-state
 
-# marimo edit SB13NP_marimo_pattern_explorer.py
-# marimo run SB13NP_marimo_pattern_explorer.py
+# marimo edit SB13NP_marimo_pattern_explorer_v2.py
+# marimo run SB13NP_marimo_pattern_explorer_v2.py
