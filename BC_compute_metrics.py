@@ -149,9 +149,7 @@ def main():
     )
 
     print("\nSpike counts:")
-    print(
-        sorting.count_num_spikes_per_unit()
-    )
+    print(sorting.count_num_spikes_per_unit())
 
     print("\n========================================")
     print("Checking recording / sorting")
