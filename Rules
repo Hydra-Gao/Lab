@@ -49,3 +49,7 @@ git push origin main
 
 # marimo edit SB13NP_marimo_pattern_explorer_v2.py
 # marimo run SB13NP_marimo_pattern_explorer_v2.py
+
+
+
+# apptainer exec spikeinterface.sif python -c "import spikeinterface as si; print(si.__version__); print(si.__file__)"

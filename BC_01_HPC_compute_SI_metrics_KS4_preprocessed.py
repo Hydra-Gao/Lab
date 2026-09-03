@@ -1,9 +1,11 @@
 from pathlib import Path
 from multiprocessing import freeze_support
 
+import numpy as np
 import pandas as pd
 import spikeinterface.full as si
 import spikeinterface.curation as sc
+from spikeinterface.core import ChannelSparsity
 
 
 # ============================================================
@@ -12,17 +14,18 @@ import spikeinterface.curation as sc
 
 # ---- Raw SpikeGLX folder ----
 SPIKEGLX_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2\original_data"
+    ("/arc/project/st-douga-1/gg5683/TG963_site1-3/original_data")
 )
+TEMP_WH_PATH = ("/arc/project/st-douga-1/gg5683/TG963_site1-3/temp_wh.dat")
 
 # ---- Kilosort4 output folder ----
 KILOSORT4_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2"
+    ("/arc/project/st-douga-1/gg5683/TG963_site1-3")
 )
 
 # ---- Output folder ----
 OUTPUT_DIR = Path(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output"
+    ("/scratch/st-douga-1/gg5683/Working_dir/TG963_site1-3/bombcell_output_whitened")
 )
 
 ANALYZER_FOLDER = OUTPUT_DIR / "sorting_analyzer"
@@ -32,17 +35,17 @@ METRICS_CSV = OUTPUT_DIR / "all_quality_metrics.csv"
 BOMBCELL_CSV = OUTPUT_DIR / "bombcell_labels.csv"
 COMBINED_CSV = OUTPUT_DIR / "metrics_with_bombcell_labels.csv"
 
-
 # ============================================================
 # COMPUTATION SETTINGS
 # ============================================================
 
-N_JOBS = 16
-CHUNK_DURATION = "1s"
+N_JOBS = 12
+CHUNK_DURATION = "30s"
+total_memory = "16G"
 
 # Number of randomly sampled spikes per unit used for waveform/PCA analysis.
 # For NP data, 500-1000 is a reasonable starting point.
-MAX_SPIKES_PER_UNIT = 1000
+MAX_SPIKES_PER_UNIT = 500
 
 # PCA settings
 N_COMPONENTS = 5
@@ -62,12 +65,12 @@ QUALITY_METRIC_NAMES = [
     "firing_rate",
     "presence_ratio",
 
-    # --------------------------------------------------------
-    # Signal / amplitude quality
-    # --------------------------------------------------------
-    "snr",
-    "amplitude_median",
-    "amplitude_cutoff",
+    # # --------------------------------------------------------
+    # # Signal / amplitude quality
+    # # --------------------------------------------------------
+    # "snr",
+    # "amplitude_median",
+    # "amplitude_cutoff",
 
     # --------------------------------------------------------
     # Refractory period metrics
@@ -82,10 +85,10 @@ QUALITY_METRIC_NAMES = [
     # Optional newer sliding refractory metric
     #"sliding_rp_violations",
 
-    # --------------------------------------------------------
-    # Drift
-    # --------------------------------------------------------
-    "drift",
+    # # --------------------------------------------------------
+    # # Drift
+    # # --------------------------------------------------------
+    # "drift",
 
     # --------------------------------------------------------
     # PCA / cluster separation metrics
@@ -100,6 +103,17 @@ QUALITY_METRIC_NAMES = [
     "nearest_neighbor",
 ]
 
+def compute_if_missing(analyzer, extension_name, **kwargs):
+    if analyzer.has_extension(extension_name):
+        print(f"[SKIP] {extension_name} already computed")
+        return analyzer.get_extension(extension_name)
+
+    print(f"[COMPUTE] {extension_name}")
+    return analyzer.compute(
+        extension_name,
+        **kwargs,
+    )
+
 
 def main():
 
@@ -108,6 +122,7 @@ def main():
     si.set_global_job_kwargs(
         n_jobs=N_JOBS,
         chunk_duration=CHUNK_DURATION,
+        # total_memory=total_memory,
         progress_bar=True,
     )
 
@@ -115,12 +130,40 @@ def main():
     print("Loading SpikeGLX recording")
     print("========================================")
 
-    recording = si.read_spikeglx(
+    # recording = si.read_spikeglx(
+    #     SPIKEGLX_FOLDER,
+    #     stream_name="imec0.ap",
+    # )
+    raw_recording = si.read_spikeglx(
         SPIKEGLX_FOLDER,
         stream_name="imec0.ap",
     )
 
+    channel_ids = raw_recording.channel_ids[:384]
+
+    temp_recording = si.read_binary(
+        TEMP_WH_PATH,
+        sampling_frequency=raw_recording.get_sampling_frequency(),
+        dtype="int16",
+        num_channels=385,
+        channel_ids=np.arange(385),
+        is_filtered=True,
+    )
+
+    # remove the last sync channel, keep AP0-AP383
+    recording = temp_recording.select_channels(
+        channel_ids=np.arange(384)
+    )
+
+    recording = recording.set_probe(
+        raw_recording.get_probe()
+    )
+    print(recording.channel_ids[:10])
+    print(raw_recording.channel_ids[:10])
+
     print(recording)
+    print(recording.channel_ids[:10])
+    print(recording.get_channel_locations()[:10])
 
     print(
         "Recording duration:",
@@ -151,6 +194,27 @@ def main():
     print("\nSpike counts:")
     print(sorting.count_num_spikes_per_unit())
 
+    print("Getting main_channel_indices from Kilosort4 cluster_info.tsv...")
+    cluster_info = pd.read_csv(
+        KILOSORT4_FOLDER / "cluster_info.tsv",
+        sep="\t"
+    )    
+    
+    unit_to_main_ch = dict(
+        zip(
+            cluster_info["cluster_id"].astype(int),
+            cluster_info["ch"].astype(int),
+        )
+    )
+    
+    main_channel_indices = np.array(
+        [
+            unit_to_main_ch[int(unit_id)]
+            for unit_id in sorting.unit_ids
+        ],
+        dtype=int,
+    )
+
     print("\n========================================")
     print("Checking recording / sorting")
     print("========================================")
@@ -174,17 +238,72 @@ def main():
         )
 
     print("\n========================================")
-    print("Creating SortingAnalyzer")
+    print("Building sparsity and Creating SortingAnalyzer")
     print("========================================")
 
-    analyzer = si.create_sorting_analyzer(
-        sorting=sorting,
-        recording=recording,
-        format="binary_folder",
-        folder=ANALYZER_FOLDER,
-        overwrite=True,
-        sparse=True,
+    n_channels = recording.get_num_channels()
+    # Dummy scaling:
+    # 1 temp_wh unit -> SI 1 "uV"
+    recording.set_channel_gains(
+        np.ones(n_channels, dtype=np.float64)
     )
+    recording.set_channel_offsets(
+        np.zeros(n_channels, dtype=np.float64)
+    )
+
+    if ANALYZER_FOLDER.exists():
+        print("Loading existing SortingAnalyzer...")
+    
+        analyzer = si.load_sorting_analyzer(
+            ANALYZER_FOLDER,
+            load_extensions=True,
+        )
+    
+    else:
+        print("Creating new SortingAnalyzer...")
+    
+        radius_um = 100.0
+    
+        unit_ids = sorting.unit_ids
+        channel_ids = recording.channel_ids
+        channel_locations = recording.get_channel_locations()
+    
+        main_channel_indices = np.asarray(main_channel_indices, dtype=int)
+    
+        assert len(main_channel_indices) == len(unit_ids)
+        assert np.all(main_channel_indices >= 0)
+        assert np.all(main_channel_indices < len(channel_ids))
+    
+        distances = np.linalg.norm(
+            channel_locations[:, None, :] -
+            channel_locations[None, :, :],
+            axis=2,
+        )
+    
+        mask = np.zeros(
+            (len(unit_ids), len(channel_ids)),
+            dtype=bool,
+        )
+    
+        for unit_ind, main_chan_ind in enumerate(main_channel_indices):
+            mask[unit_ind] = distances[main_chan_ind] <= radius_um
+    
+        sparsity = ChannelSparsity(
+            mask,
+            unit_ids,
+            channel_ids,
+        )
+    
+        print(sparsity)
+    
+        analyzer = si.create_sorting_analyzer(
+            sorting=sorting,
+            recording=recording,
+            format="binary_folder",
+            folder=ANALYZER_FOLDER,
+            overwrite=True,
+            sparsity=sparsity,
+        )
 
     print(analyzer)
 
@@ -192,14 +311,16 @@ def main():
     print("Computing random spikes")
     print("========================================")
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "random_spikes",
         method="uniform",
         max_spikes_per_unit=MAX_SPIKES_PER_UNIT,
         seed=42,
     )
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "waveforms",
         ms_before=1.0,
         ms_after=2.0,
@@ -209,7 +330,8 @@ def main():
     print("Computing templates")
     print("========================================")
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "templates",
         operators=[
             "average",
@@ -218,28 +340,32 @@ def main():
         ],
     )
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "noise_levels"
     )
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "spike_amplitudes"
     )
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "spike_locations",
         method="center_of_mass",
     )
 
-    print("\n========================================")
-    print("Computing PCA")
-    print("========================================")
+    # print("\n========================================")
+    # print("Computing PCA")
+    # print("========================================")
 
-    analyzer.compute(
-        "principal_components",
-        n_components=N_COMPONENTS,
-        mode=PCA_MODE,
-    )
+    # compute_if_missing(
+    #     analyzer,
+    #     "principal_components",
+    #     n_components=N_COMPONENTS,
+    #     mode=PCA_MODE,
+    # )
 
     print("\n========================================")
     print("Computing quality metrics")
@@ -248,7 +374,7 @@ def main():
     analyzer.compute(
         "quality_metrics",
         metric_names=QUALITY_METRIC_NAMES,
-        skip_pc_metrics=False,
+        skip_pc_metrics=True,
     )
 
     quality_metrics = (
@@ -264,7 +390,8 @@ def main():
     print("Computing template metrics")
     print("========================================")
 
-    analyzer.compute(
+    compute_if_missing(
+        analyzer,
         "template_metrics",
         include_multi_channel_metrics=True,
     )
