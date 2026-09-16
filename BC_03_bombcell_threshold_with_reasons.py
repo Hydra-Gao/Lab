@@ -5,15 +5,15 @@ import spikeinterface.full as si
 import spikeinterface.curation as sc
 
 MERGED_METRICS_CSV = Path(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_merged\Comprehensive_metrics_unwhitened.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\Comprehensive_metrics_unwhitened_with_channel_zero_fractions.csv"
 )
 
 OUTPUT_CSV = Path(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_merged\bombcell_labels_custom_unwhitened.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\bombcell_labels_custom_unwhitened_with_channel_zero_fractions_updated.csv"
 )
 
 DETAIL_OUTPUT_CSV = Path(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_merged\unit_classification_details_unwhitened.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\unit_classification_details_unwhitened_with_channel_zero_fractions_updated.csv"
 )
 
 metrics = pd.read_csv(
@@ -26,6 +26,7 @@ metrics = pd.read_csv(
 # ============================================================
 
 thresholds = sc.bombcell_get_default_thresholds()
+thresholds["mua"].pop("drift_ptp", None)
 
 print("\n===== DEFAULT THRESHOLDS =====")
 print(thresholds)
@@ -40,8 +41,9 @@ print(thresholds)
 # Example:
 thresholds["mua"]["snr"]["greater"] = 2
 thresholds["mua"]["num_spikes"]["greater"] = 500
-thresholds["mua"]["amplitude_median"]["greater"] = 233
-
+thresholds["mua"]["amplitude_median"]["greater"] = 100
+thresholds["mua"]["amplitude_cutoff"]["less"] = 0.01
+thresholds["mua"]["rp_contamination"]["less"] = 0.15
 
 # ============================================================
 # OPTIONAL: DISABLE A THRESHOLD
@@ -61,6 +63,7 @@ thresholds["noise"]["peak_to_trough_duration"]["greater"] = None
 
 thresholds["noise"]["peak_after_to_trough_ratio"]["less"] = 1.0
 thresholds["noise"]["exp_decay"]["greater"] = 0.005
+thresholds["noise"]["exp_decay"]["less"] = 0.2
 thresholds["noise"]["num_positive_peaks"]["less"] = 2
 thresholds["noise"]["num_negative_peaks"]["less"] = 2
 
@@ -77,8 +80,8 @@ thresholds["noise"]["num_negative_peaks"]["less"] = 2
 
 MIN_PC_METRICS_PASS = 4
 
-MIN_ISOLATION_DISTANCE = 20
-MAX_L_RATIO = 0.3
+MIN_ISOLATION_DISTANCE = 15
+MAX_L_RATIO = 0.2
 MIN_D_PRIME = 2
 MIN_SILHOUETTE = 0.2
 MIN_NN_HIT_RATE = 0.8
@@ -94,6 +97,10 @@ PC_METRIC_THRESHOLDS = {
 }
 
 MAX_ISI_VIOLATIONS_RATIO = 0.5
+SNR_LOWER = 2
+AMP_LOWER = 100
+SNR_UPPER = 3
+AMP_UPPER = 200
 
 print("\n===== CUSTOM THRESHOLDS =====")
 print(thresholds)
@@ -406,98 +413,117 @@ for unit_id, row in result.iterrows():
 
 
     # ========================================================
-    # STEP 2: Check 6 PC metrics
+    # STEP 2: Check grouped PC metrics
     # ========================================================
 
-    pass_count = 0
-
-    for metric_name, (
-        comparison,
-        threshold
-    ) in PC_METRIC_THRESHOLDS.items():
-
-        value = row.get(metric_name)
-
-        # NaN / missing -> does not pass
-        if pd.isna(value):
-
-            failed.append(
-                f"{metric_name}=NaN"
-            )
-
-            continue
+    isolation_distance = row.get("isolation_distance")
+    l_ratio = row.get("l_ratio")
+    d_prime = row.get("d_prime")
+    silhouette = row.get("silhouette")
+    nn_hit_rate = row.get("nn_hit_rate")
+    nn_miss_rate = row.get("nn_miss_rate")
 
 
-        # ----------------------------------------------------
-        # Minimum threshold:
-        # value >= threshold -> PASS
-        # ----------------------------------------------------
+    # --------------------------------------------------------
+    # 1. d_prime must pass
+    # --------------------------------------------------------
+    d_prime_pass = (
+        not pd.isna(d_prime)
+        and d_prime >= MIN_D_PRIME
+    )
 
-        if comparison == "greater":
-
-            passed = (
-                value >= threshold
-            )
-
-            if not passed:
-                failed.append(
-                    f"{metric_name}="
-                    f"{value:.6g} "
-                    f"< {threshold}"
-                )
+    if not d_prime_pass:
+        failed.append(
+            f"d_prime={d_prime} < {MIN_D_PRIME}"
+        )
 
 
-        # ----------------------------------------------------
-        # Maximum threshold:
-        # value <= threshold -> PASS
-        # ----------------------------------------------------
+    # --------------------------------------------------------
+    # 2. silhouette must pass
+    # --------------------------------------------------------
+    silhouette_pass = (
+        not pd.isna(silhouette)
+        and silhouette >= MIN_SILHOUETTE
+    )
 
-        elif comparison == "less":
-
-            passed = (
-                value <= threshold
-            )
-
-            if not passed:
-                failed.append(
-                    f"{metric_name}="
-                    f"{value:.6g} "
-                    f"> {threshold}"
-                )
+    if not silhouette_pass:
+        failed.append(
+            f"silhouette={silhouette} < {MIN_SILHOUETTE}"
+        )
 
 
-        else:
+    # --------------------------------------------------------
+    # 3. isolation_distance OR l_ratio
+    # --------------------------------------------------------
+    isolation_distance_pass = (
+        not pd.isna(isolation_distance)
+        and isolation_distance >= MIN_ISOLATION_DISTANCE
+    )
 
-            raise ValueError(
-                f"Unknown comparison: "
-                f"{comparison}"
-            )
+    l_ratio_pass = (
+        not pd.isna(l_ratio)
+        and l_ratio <= MAX_L_RATIO
+    )
+
+    isolation_group_pass = (
+        isolation_distance_pass or l_ratio_pass
+    )
+
+    if not isolation_group_pass:
+        failed.append(
+            f"isolation_group failed: "
+            f"isolation_distance={isolation_distance}, "
+            f"l_ratio={l_ratio}"
+        )
 
 
-        if passed:
-            pass_count += 1
+    # --------------------------------------------------------
+    # 4. nn_hit_rate OR nn_miss_rate
+    # --------------------------------------------------------
+    nn_hit_pass = (
+        not pd.isna(nn_hit_rate)
+        and nn_hit_rate >= MIN_NN_HIT_RATE
+    )
+
+    nn_miss_pass = (
+        not pd.isna(nn_miss_rate)
+        and nn_miss_rate <= MAX_NN_MISS_RATE
+    )
+
+    nn_group_pass = (
+        nn_hit_pass or nn_miss_pass
+    )
+
+    if not nn_group_pass:
+        failed.append(
+            f"nn_group failed: "
+            f"nn_hit_rate={nn_hit_rate}, "
+            f"nn_miss_rate={nn_miss_rate}"
+        )
 
 
-    # Save number of passed PC metrics
+    # ========================================================
+    # STEP 3: All 4 grouped criteria must pass
+    # ========================================================
+
+    pass_count = sum([
+        d_prime_pass,
+        silhouette_pass,
+        isolation_group_pass,
+        nn_group_pass,
+    ])
+
     pc_metrics_pass_count.loc[
         unit_id
     ] = pass_count
 
-
-    # ========================================================
-    # STEP 3: Require at least X / 6 metrics to pass
-    # ========================================================
-
-    if pass_count < MIN_PC_METRICS_PASS:
+    if pass_count < 4:
 
         custom_mua.loc[unit_id] = True
 
         failed.insert(
             0,
-            f"MUA:PC_metrics_pass="
-            f"{pass_count}/"
-            f"{len(PC_METRIC_THRESHOLDS)} "
-            f"< {MIN_PC_METRICS_PASS}"
+            f"MUA:PC_criteria_pass={pass_count}/4 < 4"
         )
 
     # ========================================================
@@ -518,6 +544,26 @@ for unit_id, row in result.iterrows():
             f"> {MAX_ISI_VIOLATIONS_RATIO}"
         )
 
+    snr = row.get("snr")
+    amplitude = abs(row.get("amplitude_median"))
+
+    signal_pass = (
+        not pd.isna(snr)
+        and not pd.isna(amplitude)
+        and (
+            ((snr >= SNR_LOWER) and (amplitude >= AMP_UPPER))
+            or
+            ((snr >= SNR_UPPER) and (amplitude >= AMP_LOWER))
+        )
+    )
+
+    if not signal_pass:
+        custom_mua.loc[unit_id] = True
+
+        failed.append(
+            f"MUA:signal_quality failed: "
+            f"snr={snr}, amplitude_median={amplitude}"
+        )
 
     # Save custom failure reasons
     result.loc[

@@ -1,19 +1,19 @@
 import pandas as pd
 from pathlib import Path
 
-OUTPUT_DIR = Path(r"C:\Lab\Processing\TG963_site1-2\bombcell_output_merged")
+OUTPUT_DIR = Path(r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged")
 
 csv1 = pd.read_csv(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_filtered_raw\all_quality_metrics.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_filtered_raw\all_quality_metrics.csv"
 )
 
 csv2 = pd.read_csv(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_whitened\all_quality_metrics.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_whitened\all_quality_metrics.csv"
 )
 
 # NEW
 csv3 = pd.read_csv(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_whitened\unwhitened_KS_PC_isolation_metrics_with_covariance_diagnostics.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_whitened\unwhitened_KS_PC_isolation_metrics_with_covariance_diagnostics_and_channel_zero_fractions.csv"
 )
 
 key = "unit_id"
@@ -27,9 +27,9 @@ cols_from_csv1 = [
     "amplitude_median",
     "snr",
     "amplitude_cutoff",
-    "drift_ptp",
-    "drift_std",
-    "drift_mad",
+    # "drift_ptp",
+    # "drift_std",
+    # "drift_mad",
     "spread",
     "exp_decay",
     "velocity_above",
@@ -48,7 +48,8 @@ cols_from_csv3 = [
     "silhouette",
     "nn_hit_rate",
     "nn_miss_rate",
-    "pc_quality"
+    "pc_quality",
+    "max_channel_zero_fraction"
 ]
 
 
@@ -98,7 +99,7 @@ merged = merged[
 
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_FILE = OUTPUT_DIR / "Comprehensive_metrics_unwhitened.csv"
+OUTPUT_FILE = OUTPUT_DIR / "Comprehensive_metrics_unwhitened_with_channel_zero_fractions.csv"
 
 merged.to_csv(
     OUTPUT_FILE,

@@ -16,10 +16,10 @@ from spikeinterface.metrics.quality.pca_metrics import (
 # ============================================================
 
 KS_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2"
+    r"C:\Lab\Processing\TG963_site1-3"
 )
 
-OUTPUT_CSV = KS_FOLDER / "bombcell_output_whitened" / "unwhitened_KS_PC_isolation_metrics_with_covariance_diagnostics.csv"
+OUTPUT_CSV = KS_FOLDER / "bombcell_output_whitened" / "unwhitened_KS_PC_isolation_metrics_with_covariance_diagnostics_and_channel_zero_fractions.csv"
 
 # IMPORTANT:
 N_PCS = 2
@@ -36,6 +36,7 @@ SAVE_EVERY = 20
 
 pc_quality_rank_threshold = 4
 pc_quality_condition_number_threshold = 1e10
+MAX_CHANNEL_ZERO_FRACTION = 0.01
 
 # ============================================================
 # METRIC FUNCTION
@@ -464,6 +465,38 @@ def compute_one_unit(
         axis=0,
     )
 
+    # --------------------------------------------------------
+    # Channel-level joint zero fraction for TARGET unit
+    # --------------------------------------------------------
+
+    target_X = X[
+        labels == target_unit_id
+    ]
+
+    channel_zero_fractions = []
+
+    for ch_i in range(N_REF_CHANNELS):
+
+        # Feature ordering is:
+        # PC1-Ch1, PC1-Ch2, ..., PC2-Ch1, PC2-Ch2, ...
+        feature_indices = [
+            pc_i * N_REF_CHANNELS + ch_i
+            for pc_i in range(N_PCS)
+        ]
+
+        joint_zero_mask = np.all(
+            target_X[:, feature_indices] == 0,
+            axis=1,
+        )
+
+        channel_zero_fractions.append(
+            np.mean(joint_zero_mask)
+        )
+
+    max_channel_zero_fraction = float(
+        np.max(channel_zero_fractions)
+    )
+
     cov_diag = compute_covariance_diagnostics(
         X,
         labels,
@@ -476,6 +509,7 @@ def compute_one_unit(
             cov_diag["cov_rank"] < pc_quality_rank_threshold
             or not np.isfinite(cov_diag["cov_condition_number"])
             or cov_diag["cov_condition_number"] > pc_quality_condition_number_threshold
+            or max_channel_zero_fraction > MAX_CHANNEL_ZERO_FRACTION
         )
         else "pass"
     )
@@ -518,6 +552,7 @@ def compute_one_unit(
         **metrics,
         **cov_diag,
         "pc_quality": pc_quality,
+        "max_channel_zero_fraction": max_channel_zero_fraction,
 
         "status":
             "ok",

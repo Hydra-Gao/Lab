@@ -15,18 +15,18 @@ from spikeinterface.core import ChannelSparsity
 
 # ---- Raw SpikeGLX folder ----
 SPIKEGLX_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2\original_data"
+    r"C:\Lab\Processing\TG963_site1-3\original_data"
 )
 # TEMP_WH_PATH = r"C:\Lab\Processing\TG963_site1-2\temp_wh.dat"
 
 # ---- Kilosort4 output folder ----
 KILOSORT4_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2"
+    r"C:\Lab\Processing\TG963_site1-3"
 )
 
 # ---- Output folder ----
 OUTPUT_DIR = Path(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_filtered_raw"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_filtered_raw"
 )
 
 ANALYZER_FOLDER = OUTPUT_DIR / "sorting_analyzer"
@@ -40,7 +40,7 @@ COMBINED_CSV = OUTPUT_DIR / "metrics_with_bombcell_labels.csv"
 # COMPUTATION SETTINGS
 # ============================================================
 
-N_JOBS = 4
+N_JOBS = 1
 CHUNK_DURATION = "30s"
 total_memory = "16G"
 
@@ -67,6 +67,8 @@ QUALITY_METRIC_NAMES = [
     "amplitude_median",
     "amplitude_cutoff",
     "drift",
+    "amplitude_cv",
+    "firing_range",
 
     # # --------------------------------------------------------
     # # Spike count / firing properties
@@ -329,7 +331,8 @@ def main():
 
     compute_if_missing(
         analyzer,
-        "spike_amplitudes"
+        "spike_amplitudes",
+        peak_sign="both",
     )
 
     # print("\n========================================")

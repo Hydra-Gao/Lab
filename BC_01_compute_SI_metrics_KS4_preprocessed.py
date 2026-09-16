@@ -14,18 +14,18 @@ from spikeinterface.core import ChannelSparsity
 
 # ---- Raw SpikeGLX folder ----
 SPIKEGLX_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2\original_data"
+    r"C:\Lab\Processing\TG963_site1-3\original_data"
 )
-TEMP_WH_PATH = r"C:\Lab\Processing\TG963_site1-2\temp_wh.dat"
+TEMP_WH_PATH = r"C:\Lab\Processing\TG963_site1-3\temp_wh.dat"
 
 # ---- Kilosort4 output folder ----
 KILOSORT4_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2"
+    r"C:\Lab\Processing\TG963_site1-3"
 )
 
 # ---- Output folder ----
 OUTPUT_DIR = Path(
-    r"C:\Lab\Processing\TG963_site1-2\bombcell_output_whitened"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_whitened"
 )
 
 ANALYZER_FOLDER = OUTPUT_DIR / "sorting_analyzer"
@@ -39,7 +39,7 @@ COMBINED_CSV = OUTPUT_DIR / "metrics_with_bombcell_labels.csv"
 # COMPUTATION SETTINGS
 # ============================================================
 
-N_JOBS = 4
+N_JOBS = 2
 CHUNK_DURATION = "30s"
 total_memory = "16G"
 
@@ -375,6 +375,16 @@ def main():
     analyzer.compute(
         "quality_metrics",
         metric_names=QUALITY_METRIC_NAMES,
+        metric_params={
+            "rp_violation": {
+                # for CS:
+                # "refractory_period_ms": 3,
+                # "censored_period_ms": 1.5,
+                # for SS & all other types:
+                "refractory_period_ms": 1,
+                "censored_period_ms":0.25,
+            },
+        },
         skip_pc_metrics=True,
     )
 
@@ -383,6 +393,41 @@ def main():
         .get_extension("quality_metrics")
         .get_data()
     )
+
+    # ============================================================
+    # Extra RP contamination for low-firing-rate units
+    # 1.5–3 ms window
+    # ============================================================
+
+    from spikeinterface.qualitymetrics import compute_refrac_period_violations
+
+    low_fr_unit_ids = quality_metrics.index[
+        quality_metrics["firing_rate"] < 10
+    ].tolist()
+
+    print(
+        f"Computing 1.5–3 ms RP contamination for "
+        f"{len(low_fr_unit_ids)} units with firing_rate < 10 Hz"
+    )
+
+    rp_contam_1p5_3ms, rp_viol_1p5_3ms = compute_refrac_period_violations(
+        analyzer,
+        refractory_period_ms=3.0,
+        censored_period_ms=1.5,
+        unit_ids=low_fr_unit_ids,
+    )
+
+    quality_metrics["rp_contamination_1p5_3ms"] = np.nan
+    quality_metrics["rp_violations_1p5_3ms"] = np.nan
+
+    for unit_id in low_fr_unit_ids:
+        quality_metrics.loc[
+            unit_id, "rp_contamination_1p5_3ms"
+        ] = rp_contam_1p5_3ms[unit_id]
+
+        quality_metrics.loc[
+            unit_id, "rp_violations_1p5_3ms"
+        ] = rp_viol_1p5_3ms[unit_id]
 
     print("\nQuality metric columns:")
     print(list(quality_metrics.columns))
@@ -411,6 +456,14 @@ def main():
     print("========================================")
 
     all_metrics = analyzer.get_metrics_extension_data()
+
+    all_metrics["rp_contamination_1p5_3ms"] = (
+        quality_metrics["rp_contamination_1p5_3ms"]
+    )
+
+    all_metrics["rp_violations_1p5_3ms"] = (
+        quality_metrics["rp_violations_1p5_3ms"]
+    )
 
     all_metrics.index.name = "unit_id"
 
