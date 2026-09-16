@@ -21,7 +21,7 @@ from spikeinterface.metrics.quality.pca_metrics import (
 # ============================================================
 
 KS_FOLDER = Path(
-    r"C:\Lab\Processing\TG963_site1-2"
+    r"C:\Lab\Processing\TG963_site1-3"
 )
 
 # Units to inspect manually.
