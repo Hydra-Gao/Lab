@@ -5,15 +5,15 @@ import spikeinterface.full as si
 import spikeinterface.curation as sc
 
 MERGED_METRICS_CSV = Path(
-    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\Comprehensive_metrics_unwhitened_with_channel_zero_fractions.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\SI-PC_Comprehensive_metrics_unwhitened_with_channel_zero_fractions.csv"
 )
 
 OUTPUT_CSV = Path(
-    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\bombcell_labels_custom_unwhitened_with_channel_zero_fractions_updated.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\SI-PC_bombcell_labels_custom_unwhitened_with_channel_zero_fractions_updated.csv"
 )
 
 DETAIL_OUTPUT_CSV = Path(
-    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\unit_classification_details_unwhitened_with_channel_zero_fractions_updated.csv"
+    r"C:\Lab\Processing\TG963_site1-3\bombcell_output_merged\SI-PC_unit_classification_details_unwhitened_with_channel_zero_fractions_updated.csv"
 )
 
 metrics = pd.read_csv(
@@ -60,7 +60,7 @@ thresholds["noise"]["peak_to_trough_duration"]["greater"] = None
 
 # thresholds["noise"]["num_positive_peaks"]["less"] = ...
 # thresholds["noise"]["num_negative_peaks"]["less"] = 2
-
+thresholds["noise"]["waveform_baseline_flatness"]["less"] = 0.6
 thresholds["noise"]["peak_after_to_trough_ratio"]["less"] = 1.0
 thresholds["noise"]["exp_decay"]["greater"] = 0.005
 thresholds["noise"]["exp_decay"]["less"] = 0.2
@@ -83,7 +83,7 @@ MIN_PC_METRICS_PASS = 4
 MIN_ISOLATION_DISTANCE = 15
 MAX_L_RATIO = 0.2
 MIN_D_PRIME = 2
-MIN_SILHOUETTE = 0.2
+MIN_SILHOUETTE = 0.01
 MIN_NN_HIT_RATE = 0.8
 MAX_NN_MISS_RATE = 0.2
 
@@ -391,25 +391,25 @@ for unit_id, row in result.iterrows():
     # STEP 1: PC quality
     # ========================================================
 
-    pc_quality = row.get("pc_quality")
+    # pc_quality = row.get("pc_quality")
 
-    if (
-        pd.isna(pc_quality)
-        or str(pc_quality).lower() != "pass"
-    ):
+    # if (
+    #     pd.isna(pc_quality)
+    #     or str(pc_quality).lower() != "pass"
+    # ):
 
-        custom_mua.loc[unit_id] = True
+    #     custom_mua.loc[unit_id] = True
 
-        failed.append(
-            f"MUA:pc_quality={pc_quality}"
-        )
+    #     failed.append(
+    #         f"MUA:pc_quality={pc_quality}"
+    #     )
 
-        result.loc[
-            unit_id,
-            "custom_failed_criteria"
-        ] = "; ".join(failed)
+    #     result.loc[
+    #         unit_id,
+    #         "custom_failed_criteria"
+    #     ] = "; ".join(failed)
 
-        continue
+    #     continue
 
 
     # ========================================================

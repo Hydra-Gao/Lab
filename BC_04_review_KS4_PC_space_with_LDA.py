@@ -26,7 +26,7 @@ KS_FOLDER = Path(
 
 # Units to inspect manually.
 # Example: TARGET_UNITS = [36, 82, 88, 527, 685]
-TARGET_UNITS = [802]
+TARGET_UNITS = [131]
 
 # IMPORTANT: keep these identical to the metric script if you want the
 # plotted feature space to be exactly the same space used for QC metrics.
@@ -34,7 +34,7 @@ N_PCS = 2
 N_REF_CHANNELS = 2
 
 # Same per-unit sampling philosophy as the metric script.
-MAX_SPIKES_PER_UNIT = 1000
+MAX_SPIKES_PER_UNIT = 500
 RANDOM_SEED = 42
 
 # Same NN metric settings as the metric script.

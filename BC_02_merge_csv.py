@@ -42,14 +42,14 @@ cols_from_csv1 = [
 # ============================================================
 
 cols_from_csv3 = [
-    "isolation_distance",
-    "l_ratio",
-    "d_prime",
-    "silhouette",
-    "nn_hit_rate",
-    "nn_miss_rate",
-    "pc_quality",
-    "max_channel_zero_fraction"
+    # "isolation_distance",
+    # "l_ratio",
+    # "d_prime",
+    # "silhouette",
+    # "nn_hit_rate",
+    # "nn_miss_rate",
+    # "pc_quality",
+    # "max_channel_zero_fraction"
 ]
 
 
@@ -99,7 +99,7 @@ merged = merged[
 
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_FILE = OUTPUT_DIR / "Comprehensive_metrics_unwhitened_with_channel_zero_fractions.csv"
+OUTPUT_FILE = OUTPUT_DIR / "SI-PC_Comprehensive_metrics_unwhitened_with_channel_zero_fractions.csv"
 
 merged.to_csv(
     OUTPUT_FILE,

@@ -1,13 +1,13 @@
 from pathlib import Path
 
 BIRD = "TG963"
-SESSION = "site2-1"
+SESSION = "site1-3"
 SORTER_NAME = "kilosort4" 
 WORKING_DIR = Path(fr"C:\Lab\Processing\{BIRD}_{SESSION}")
 OUTPUT_DIR = Path(fr"C:\Lab\Processing\{BIRD}_{SESSION}\Output_dir_almost")
 
-SPIKEGLX_BIN_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_site2_1_g0_t0.imec0.ap.bin"
-SPIKEGLX_META_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_site2_1_g0_t0.imec0.ap.meta"
+SPIKEGLX_BIN_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_site1_3_g0_t0.imec0.ap.bin"
+SPIKEGLX_META_PATH = WORKING_DIR / f"original_data\Cb_2026_07_14_site1_3_g0_t0.imec0.ap.meta"
 
 # which channel in the SpikeGLX .ap.bin file contains the digital word (TTL) information.
 DIGITAL_WORD_CHANNEL_INDEX = -1

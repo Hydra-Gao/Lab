@@ -48,7 +48,7 @@ total_memory = "16G"
 MAX_SPIKES_PER_UNIT = 500
 
 # PCA settings
-N_COMPONENTS = 5
+N_COMPONENTS = 3
 PCA_MODE = "by_channel_global"
 
 
@@ -356,17 +356,17 @@ def main():
         method="center_of_mass",
     )
 
-    # print("\n========================================")
-    # print("Computing PCA")
-    # print("========================================")
+    print("\n========================================")
+    print("Computing PCA")
+    print("========================================")
 
-    # compute_if_missing(
-    #     analyzer,
-    #     "principal_components",
-    #     n_components=N_COMPONENTS,
-    #     mode=PCA_MODE,
-    #     whiten=False,
-    # )
+    compute_if_missing(
+        analyzer,
+        "principal_components",
+        n_components=N_COMPONENTS,
+        mode=PCA_MODE,
+        whiten=False,
+    )
 
     print("\n========================================")
     print("Computing quality metrics")
@@ -385,7 +385,7 @@ def main():
                 "censored_period_ms":0.25,
             },
         },
-        skip_pc_metrics=True,
+        skip_pc_metrics=False,
     )
 
     quality_metrics = (

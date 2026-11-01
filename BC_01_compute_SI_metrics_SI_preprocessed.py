@@ -50,7 +50,7 @@ MAX_SPIKES_PER_UNIT = 1000
 
 # PCA settings
 N_COMPONENTS = 5
-PCA_MODE = "by_channel_local"
+PCA_MODE = "by_channel_global"
 
 highpass_filter_min_freq = 10.0  # Hz
 

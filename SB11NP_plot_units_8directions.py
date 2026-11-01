@@ -311,6 +311,15 @@ def main():
         condition_summary = condition_summary[condition_summary["trial_kind"] == "single_screen_8direction"].copy()
 
     units_to_plot = get_units_to_plot(units, sig)
+
+    # manually selected units
+    SELECTED_UNITS = [711]
+
+    units_to_plot = [
+        u for u in units_to_plot
+        if u in SELECTED_UNITS
+    ]
+
     print(f"Units to plot: {len(units_to_plot)}")
     for unit_id in units_to_plot:
         plot_one_unit(unit_id, labeled, trial_summary, condition_summary, sig, plot_dir)
